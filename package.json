@@ -1,0 +1,21 @@
+{
+  "name": "tg-duel-quiz",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "pnpm@9.0.0",
+  "scripts": {
+    "dev:web": "pnpm --filter @tg-duel/web dev",
+    "dev:realtime": "pnpm --filter @tg-duel/realtime dev",
+    "build": "pnpm -r build",
+    "build:web": "pnpm --filter @tg-duel/web build",
+    "build:realtime": "pnpm --filter @tg-duel/realtime build",
+    "db:generate": "pnpm --filter @tg-duel/web db:generate",
+    "db:push": "pnpm --filter @tg-duel/web db:push",
+    "db:studio": "pnpm --filter @tg-duel/web db:studio",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm -r lint"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5"
+  }
+}
