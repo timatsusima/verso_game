@@ -13,6 +13,7 @@ export function cn(...inputs: ClassValue[]) {
  */
 export function generateInviteLink(duelId: string): string {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  console.log('[generateInviteLink] NEXT_PUBLIC_APP_URL:', process.env.NEXT_PUBLIC_APP_URL, 'baseUrl:', baseUrl);
   return `${baseUrl}/duel/${duelId}/join`;
 }
 
