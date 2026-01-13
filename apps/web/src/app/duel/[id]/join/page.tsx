@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/stores/auth-store';
 import { useTranslations } from '@/hooks/use-translations';
@@ -16,7 +16,23 @@ interface DuelData {
   creator: { firstName: string };
 }
 
+function LoadingSpinner() {
+  return (
+    <div className="flex-1 flex items-center justify-center">
+      <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
+}
+
 export default function JoinPage() {
+  return (
+    <Suspense fallback={<LoadingSpinner />}>
+      <JoinPageContent />
+    </Suspense>
+  );
+}
+
+function JoinPageContent() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();

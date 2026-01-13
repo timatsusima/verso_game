@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/stores/auth-store';
 import { Button } from '@/components/ui/button';
@@ -10,7 +10,23 @@ import { Card } from '@/components/ui/card';
 import { useTranslations } from '@/hooks/use-translations';
 import type { Language } from '@tg-duel/shared';
 
+function LoadingSpinner() {
+  return (
+    <div className="flex-1 flex items-center justify-center">
+      <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
+}
+
 export default function HomePage() {
+  return (
+    <Suspense fallback={<LoadingSpinner />}>
+      <HomePageContent />
+    </Suspense>
+  );
+}
+
+function HomePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectUrl = searchParams.get('redirect');
