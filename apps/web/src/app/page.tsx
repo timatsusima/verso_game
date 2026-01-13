@@ -128,9 +128,45 @@ function HomePageContent() {
     authenticate();
   }, [isAuthenticated, token, setAuth]);
 
-  const handleLanguageSelect = (lang: Language) => {
+  const handleLanguageSelect = async (lang: Language) => {
     setLanguage(lang);
     setShowLanguageSelect(false);
+    
+    // Try to authenticate with Telegram after language selection
+    if (!isAuthenticated) {
+      setIsAuthenticating(true);
+      try {
+        let initData = '';
+        
+        if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
+          initData = window.Telegram.WebApp.initData;
+        }
+        
+        if (initData) {
+          const response = await fetch('/api/auth/telegram', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ initData }),
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            setAuth({
+              token: data.token,
+              userId: data.user.id,
+              telegramId: data.user.telegramId,
+              username: data.user.username,
+              firstName: data.user.firstName,
+              language: lang,
+            });
+          }
+        }
+      } catch (err) {
+        console.error('Auth error after language select:', err);
+      } finally {
+        setIsAuthenticating(false);
+      }
+    }
   };
 
   const handleCreateDuel = async () => {
@@ -143,11 +179,41 @@ function HomePageContent() {
     setError(null);
 
     try {
+      // If not authenticated, try to authenticate first
+      let authToken = token;
+      
+      if (!authToken && typeof window !== 'undefined' && window.Telegram?.WebApp?.initData) {
+        const authResponse = await fetch('/api/auth/telegram', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ initData: window.Telegram.WebApp.initData }),
+        });
+
+        if (authResponse.ok) {
+          const authData = await authResponse.json();
+          authToken = authData.token;
+          setAuth({
+            token: authData.token,
+            userId: authData.user.id,
+            telegramId: authData.user.telegramId,
+            username: authData.user.username,
+            firstName: authData.user.firstName,
+            language: language,
+          });
+        } else {
+          throw new Error(language === 'ru' ? 'Ошибка авторизации' : 'Authentication failed');
+        }
+      }
+
+      if (!authToken) {
+        throw new Error(language === 'ru' ? 'Необходима авторизация через Telegram' : 'Telegram authorization required');
+      }
+
       const response = await fetch('/api/duel/create', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
+          'Authorization': `Bearer ${authToken}`,
         },
         body: JSON.stringify({
           topic: topic.trim(),
@@ -182,8 +248,8 @@ function HomePageContent() {
     );
   }
 
-  // Language selection
-  if (showLanguageSelect || !isAuthenticated) {
+  // Language selection (show only if explicitly needed or first visit)
+  if (showLanguageSelect) {
     return (
       <div className="flex-1 flex items-center justify-center p-6">
         <Card variant="glass" className="w-full max-w-sm animate-scale-in">
@@ -216,13 +282,18 @@ function HomePageContent() {
     );
   }
 
+  // Get display name from Telegram or auth store
+  const displayName = firstName || 
+    (typeof window !== 'undefined' && window.Telegram?.WebApp?.initDataUnsafe?.user?.first_name) || 
+    (language === 'ru' ? 'Игрок' : 'Player');
+
   return (
     <div className="flex-1 flex flex-col p-6">
       {/* Header */}
       <div className="text-center mb-8">
         <h1 className="text-3xl font-bold mb-2">🎯 Duel Quiz</h1>
         <p className="text-tg-text-secondary">
-          {language === 'ru' ? `Привет, ${firstName}!` : `Hey, ${firstName}!`}
+          {language === 'ru' ? `Привет, ${displayName}!` : `Hey, ${displayName}!`}
         </p>
       </div>
 
