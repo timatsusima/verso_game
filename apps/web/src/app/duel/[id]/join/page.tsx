@@ -38,17 +38,86 @@ function JoinPageContent() {
   const searchParams = useSearchParams();
   const devParam = searchParams.get('dev');
   const { t, language } = useTranslations();
-  const { token, isAuthenticated, setLanguage } = useAuthStore();
+  const { token, isAuthenticated, setLanguage, setAuth } = useAuthStore();
   
   const [duel, setDuel] = useState<DuelData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isJoining, setIsJoining] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
 
   const duelId = params.id as string;
 
+  // Authenticate directly on this page
+  useEffect(() => {
+    const authenticate = async () => {
+      if (isAuthenticated && token) return;
+      
+      setIsAuthenticating(true);
+      try {
+        let initData = '';
+        
+        if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
+          initData = window.Telegram.WebApp.initData;
+          window.Telegram.WebApp.ready();
+          window.Telegram.WebApp.expand();
+        }
+
+        // For development
+        if (!initData && process.env.NODE_ENV === 'development') {
+          const devUserId = devParam === '2' ? 987654321 : 123456789;
+          const devUserName = devParam === '2' ? 'Player2' : 'Dev';
+          initData = 'dev:' + JSON.stringify({
+            id: devUserId,
+            first_name: devUserName,
+            last_name: 'User',
+            username: devUserName.toLowerCase(),
+            language_code: 'ru',
+          });
+        }
+
+        if (!initData) {
+          setError('Telegram authorization required');
+          setIsLoading(false);
+          return;
+        }
+
+        const response = await fetch('/api/auth/telegram', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ initData }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Authentication failed');
+        }
+
+        const data = await response.json();
+        setAuth({
+          token: data.token,
+          userId: data.user.id,
+          telegramId: data.user.telegramId,
+          username: data.user.username,
+          firstName: data.user.firstName,
+          language: data.user.language,
+        });
+      } catch (err) {
+        console.error('Auth error:', err);
+        setError('Authentication failed');
+        setIsLoading(false);
+      } finally {
+        setIsAuthenticating(false);
+      }
+    };
+
+    authenticate();
+  }, [isAuthenticated, token, setAuth, devParam]);
+
+  // Fetch duel after authentication
   useEffect(() => {
     const fetchDuel = async () => {
+      if (!token) return;
+      
       try {
         const response = await fetch(`/api/duel/${duelId}`, {
           headers: {
@@ -69,14 +138,10 @@ function JoinPageContent() {
       }
     };
 
-    if (token) {
+    if (token && !isAuthenticating) {
       fetchDuel();
-    } else if (!isAuthenticated) {
-      // Redirect to home to authenticate first, preserve dev param
-      const devQuery = devParam ? `&dev=${devParam}` : '';
-      router.push(`/?redirect=/duel/${duelId}/join${devQuery}`);
     }
-  }, [duelId, token, isAuthenticated, router]);
+  }, [duelId, token, isAuthenticating]);
 
   const handleJoin = async () => {
     setIsJoining(true);

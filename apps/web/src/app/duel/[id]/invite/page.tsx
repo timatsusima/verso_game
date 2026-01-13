@@ -6,7 +6,7 @@ import { useAuthStore } from '@/stores/auth-store';
 import { useTranslations } from '@/hooks/use-translations';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { generateInviteLink, generateTelegramShareLink } from '@/lib/utils';
+import { generateTelegramShareLink } from '@/lib/utils';
 
 interface DuelData {
   id: string;
@@ -26,11 +26,9 @@ export default function InvitePage() {
   
   const [duel, setDuel] = useState<DuelData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const duelId = params.id as string;
-  const inviteLink = generateInviteLink(duelId);
   const telegramShareLink = duel ? generateTelegramShareLink(duelId, duel.topic) : '';
 
   useEffect(() => {
@@ -68,24 +66,6 @@ export default function InvitePage() {
       return () => clearInterval(interval);
     }
   }, [duelId, token, router]);
-
-  const handleCopyLink = async () => {
-    try {
-      await navigator.clipboard.writeText(inviteLink);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Fallback for older browsers
-      const textArea = document.createElement('textarea');
-      textArea.value = inviteLink;
-      document.body.appendChild(textArea);
-      textArea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textArea);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
 
   const handleTelegramShare = () => {
     if (window.Telegram?.WebApp) {
@@ -146,37 +126,16 @@ export default function InvitePage() {
         </div>
       </Card>
 
-      {/* Share Options */}
-      <div className="space-y-3 animate-slide-up" style={{ animationDelay: '100ms' }}>
-        {/* Telegram Share Button */}
+      {/* Share Button */}
+      <div className="animate-slide-up" style={{ animationDelay: '100ms' }}>
         <Button
           fullWidth
           size="lg"
           onClick={handleTelegramShare}
         >
-          📤 {t('share')} via Telegram
-        </Button>
-
-        {/* Copy Link Button */}
-        <Button
-          fullWidth
-          size="lg"
-          variant="secondary"
-          onClick={handleCopyLink}
-        >
-          {copied ? '✅ ' + t('linkCopied') : '📋 ' + t('copyLink')}
+          📤 {language === 'ru' ? 'Пригласить друга' : 'Invite Friend'}
         </Button>
       </div>
-
-      {/* Link Preview */}
-      <Card variant="glass" className="mt-6 animate-slide-up" style={{ animationDelay: '200ms' }}>
-        <p className="text-xs text-tg-hint mb-2">
-          {language === 'ru' ? 'Ссылка откроется в Telegram:' : 'Link will open in Telegram:'}
-        </p>
-        <p className="text-sm text-tg-text-secondary break-all font-mono">
-          {inviteLink}
-        </p>
-      </Card>
 
       {/* Back Button */}
       <div className="mt-auto pt-6">
