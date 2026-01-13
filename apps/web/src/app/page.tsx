@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/stores/auth-store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,6 +12,9 @@ import type { Language } from '@tg-duel/shared';
 
 export default function HomePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectUrl = searchParams.get('redirect');
+  const devParam = searchParams.get('dev');
   const { t, language } = useTranslations();
   const { 
     isAuthenticated, 
@@ -27,6 +30,16 @@ export default function HomePage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isAuthenticating, setIsAuthenticating] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Handle redirect after authentication
+  useEffect(() => {
+    if (isAuthenticated && token && redirectUrl) {
+      // Preserve dev param in redirect
+      const devQuery = devParam && !redirectUrl.includes('dev=') ? 
+        (redirectUrl.includes('?') ? `&dev=${devParam}` : `?dev=${devParam}`) : '';
+      router.push(redirectUrl + devQuery);
+    }
+  }, [isAuthenticated, token, redirectUrl, devParam, router]);
 
   // Authenticate with Telegram on mount
   useEffect(() => {
@@ -49,12 +62,16 @@ export default function HomePage() {
 
         // For development without Telegram
         if (!initData && process.env.NODE_ENV === 'development') {
+          // Use URL param ?dev=2 to create second test user
+          const devUserId = devParam === '2' ? 987654321 : 123456789;
+          const devUserName = devParam === '2' ? 'Player2' : 'Dev';
+          
           initData = 'dev:' + JSON.stringify({
-            id: 123456789,
-            first_name: 'Dev',
+            id: devUserId,
+            first_name: devUserName,
             last_name: 'User',
-            username: 'devuser',
-            language_code: 'en',
+            username: devUserName.toLowerCase(),
+            language_code: 'ru',
           });
         }
 

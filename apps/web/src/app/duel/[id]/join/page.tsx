@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/stores/auth-store';
 import { useTranslations } from '@/hooks/use-translations';
 import { Button } from '@/components/ui/button';
@@ -19,6 +19,8 @@ interface DuelData {
 export default function JoinPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const devParam = searchParams.get('dev');
   const { t, language } = useTranslations();
   const { token, isAuthenticated, setLanguage } = useAuthStore();
   
@@ -54,8 +56,9 @@ export default function JoinPage() {
     if (token) {
       fetchDuel();
     } else if (!isAuthenticated) {
-      // Redirect to home to authenticate first
-      router.push(`/?redirect=/duel/${duelId}/join`);
+      // Redirect to home to authenticate first, preserve dev param
+      const devQuery = devParam ? `&dev=${devParam}` : '';
+      router.push(`/?redirect=/duel/${duelId}/join${devQuery}`);
     }
   }, [duelId, token, isAuthenticated, router]);
 

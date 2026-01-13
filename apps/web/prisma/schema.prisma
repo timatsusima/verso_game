@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -62,7 +62,7 @@ model DuelPack {
   duel       Duel   @relation(fields: [duelId], references: [id], onDelete: Cascade)
   
   // JSON string of QuestionWithAnswer[]
-  questions  String
+  questions  String @db.Text
   
   // For commit-reveal anti-cheat
   seed       String
