@@ -13,10 +13,11 @@ export function cn(...inputs: ClassValue[]) {
  */
 export function generateInviteLink(duelId: string): string {
   const botUsername = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'vrs_game_bot';
-  const appName = process.env.NEXT_PUBLIC_TELEGRAM_APP_NAME || 'app';
+  const appShortName = process.env.NEXT_PUBLIC_TELEGRAM_APP_SHORT_NAME || 'game';
   
-  // Use Telegram Mini App deep link format
-  return `https://t.me/${botUsername}/${appName}?startapp=join_${duelId}`;
+  // Use Mini App deep link format
+  // Requires Mini App created via BotFather /newapp with matching short_name
+  return `https://t.me/${botUsername}/${appShortName}?startapp=join_${duelId}`;
 }
 
 /**
