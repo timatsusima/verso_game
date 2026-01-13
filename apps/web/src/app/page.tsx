@@ -47,6 +47,22 @@ function HomePageContent() {
   const [isAuthenticating, setIsAuthenticating] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Handle Telegram start_param (deep link)
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.Telegram?.WebApp?.initDataUnsafe?.start_param) {
+      const startParam = window.Telegram.WebApp.initDataUnsafe.start_param;
+      console.log('[HomePage] start_param:', startParam);
+      
+      // Handle join_DUEL_ID format
+      if (startParam.startsWith('join_')) {
+        const duelId = startParam.replace('join_', '');
+        console.log('[HomePage] Redirecting to join duel:', duelId);
+        router.push(`/duel/${duelId}/join`);
+        return;
+      }
+    }
+  }, [router]);
+
   // Handle redirect after authentication
   useEffect(() => {
     if (isAuthenticated && token && redirectUrl) {
@@ -373,6 +389,7 @@ declare global {
             username?: string;
             language_code?: string;
           };
+          start_param?: string;
         };
         ready: () => void;
         expand: () => void;

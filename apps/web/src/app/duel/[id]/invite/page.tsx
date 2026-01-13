@@ -171,7 +171,7 @@ export default function InvitePage() {
       {/* Link Preview */}
       <Card variant="glass" className="mt-6 animate-slide-up" style={{ animationDelay: '200ms' }}>
         <p className="text-xs text-tg-hint mb-2">
-          {language === 'ru' ? 'Ссылка для приглашения:' : 'Invite link:'}
+          {language === 'ru' ? 'Ссылка откроется в Telegram:' : 'Link will open in Telegram:'}
         </p>
         <p className="text-sm text-tg-text-secondary break-all font-mono">
           {inviteLink}

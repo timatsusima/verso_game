@@ -9,12 +9,14 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 /**
- * Generate invite link for a duel
+ * Generate invite link for a duel (Telegram Mini App format)
  */
 export function generateInviteLink(duelId: string): string {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-  console.log('[generateInviteLink] NEXT_PUBLIC_APP_URL:', process.env.NEXT_PUBLIC_APP_URL, 'baseUrl:', baseUrl);
-  return `${baseUrl}/duel/${duelId}/join`;
+  const botUsername = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'vrs_game_bot';
+  const appName = process.env.NEXT_PUBLIC_TELEGRAM_APP_NAME || 'app';
+  
+  // Use Telegram Mini App deep link format
+  return `https://t.me/${botUsername}/${appName}?startapp=join_${duelId}`;
 }
 
 /**
@@ -22,7 +24,7 @@ export function generateInviteLink(duelId: string): string {
  */
 export function generateTelegramShareLink(duelId: string, topic: string): string {
   const inviteLink = generateInviteLink(duelId);
-  const text = encodeURIComponent(`🎯 Вызываю тебя на дуэль!\n\nТема: ${topic}\n\nПрисоединяйся:`);
+  const text = encodeURIComponent(`🎯 Вызываю тебя на дуэль!\n\nТема: ${topic}`);
   return `https://t.me/share/url?url=${encodeURIComponent(inviteLink)}&text=${text}`;
 }
 
