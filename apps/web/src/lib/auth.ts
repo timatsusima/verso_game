@@ -44,7 +44,15 @@ export function validateInitData(initData: string): TelegramUserData | null {
     const urlParams = new URLSearchParams(initData);
     const hash = urlParams.get('hash');
     
-    if (!hash) return null;
+    if (!hash) {
+      console.error('Telegram auth: No hash in initData');
+      return null;
+    }
+
+    if (!TELEGRAM_BOT_TOKEN) {
+      console.error('Telegram auth: TELEGRAM_BOT_TOKEN is not set');
+      return null;
+    }
 
     // Remove hash from params and sort
     urlParams.delete('hash');
@@ -68,17 +76,17 @@ export function validateInitData(initData: string): TelegramUserData | null {
       .digest('hex');
 
     if (calculatedHash !== hash) {
-      console.error('Invalid hash');
+      console.error('Telegram auth: Invalid hash. Expected:', calculatedHash.slice(0, 10) + '...', 'Got:', hash.slice(0, 10) + '...');
       return null;
     }
 
-    // Check auth_date (valid for 1 hour)
+    // Check auth_date (valid for 24 hours)
     const authDate = urlParams.get('auth_date');
     if (authDate) {
       const authTimestamp = parseInt(authDate, 10);
       const now = Math.floor(Date.now() / 1000);
-      if (now - authTimestamp > 3600) {
-        console.error('Auth data expired');
+      if (now - authTimestamp > 86400) { // 24 hours
+        console.error('Telegram auth: Auth data expired');
         return null;
       }
     }

@@ -19,14 +19,19 @@ export async function POST(request: NextRequest) {
 
     const { initData } = parsed.data;
 
+    console.log('Auth attempt, initData length:', initData?.length);
+
     // Validate Telegram initData
     const telegramUser = validateInitData(initData);
     if (!telegramUser) {
+      console.error('Auth failed: validateInitData returned null');
       return NextResponse.json(
         { error: 'Invalid or expired initData' },
         { status: 401 }
       );
     }
+
+    console.log('Auth success for user:', telegramUser.id, telegramUser.first_name);
 
     // Determine language from Telegram
     const language: Language = telegramUser.language_code?.startsWith('ru') ? 'ru' : 'en';
