@@ -1,0 +1,93 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id         String   @id @default(cuid())
+  telegramId String   @unique
+  username   String?
+  firstName  String
+  lastName   String?
+  photoUrl   String?
+  language   String   @default("en") // "ru" | "en"
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  createdDuels  Duel[]       @relation("DuelCreator")
+  joinedDuels   Duel[]       @relation("DuelOpponent")
+  wonDuels      Duel[]       @relation("DuelWinner")
+  answers       DuelAnswer[]
+
+  @@index([telegramId])
+}
+
+model Duel {
+  id             String    @id @default(cuid())
+  topic          String
+  questionsCount Int       @default(10)
+  language       String    @default("en")
+  status         String    @default("waiting") // waiting, ready, in_progress, finished
+  
+  creatorId      String
+  creator        User      @relation("DuelCreator", fields: [creatorId], references: [id])
+  
+  opponentId     String?
+  opponent       User?     @relation("DuelOpponent", fields: [opponentId], references: [id])
+  
+  winnerId       String?
+  winner         User?     @relation("DuelWinner", fields: [winnerId], references: [id])
+  
+  createdAt      DateTime  @default(now())
+  startedAt      DateTime?
+  finishedAt     DateTime?
+
+  // Relations
+  pack           DuelPack?
+  answers        DuelAnswer[]
+
+  @@index([creatorId])
+  @@index([opponentId])
+  @@index([status])
+}
+
+model DuelPack {
+  id         String @id @default(cuid())
+  duelId     String @unique
+  duel       Duel   @relation(fields: [duelId], references: [id], onDelete: Cascade)
+  
+  // JSON string of QuestionWithAnswer[]
+  questions  String @db.Text
+  
+  // For commit-reveal anti-cheat
+  seed       String
+  commitHash String
+
+  createdAt  DateTime @default(now())
+}
+
+model DuelAnswer {
+  id             String   @id @default(cuid())
+  
+  duelId         String
+  duel           Duel     @relation(fields: [duelId], references: [id], onDelete: Cascade)
+  
+  playerId       String
+  player         User     @relation(fields: [playerId], references: [id])
+  
+  questionIndex  Int
+  answerIndex    Int?     // null = timeout/no answer
+  isCorrect      Boolean
+  responseTimeMs Int
+  
+  answeredAt     DateTime @default(now())
+
+  @@unique([duelId, playerId, questionIndex])
+  @@index([duelId])
+  @@index([playerId])
+}

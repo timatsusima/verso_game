@@ -5,7 +5,7 @@ RUN npm install -g pnpm
 
 WORKDIR /app
 
-# Copy workspace files
+# Copy workspace files from root
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY packages/shared ./packages/shared
 COPY apps/realtime ./apps/realtime
@@ -16,9 +16,8 @@ RUN pnpm install --frozen-lockfile
 # Build shared package
 RUN cd packages/shared && pnpm build
 
-# Generate Prisma client
-COPY apps/web/prisma ./apps/web/prisma
-RUN cd apps/web && pnpm db:generate || true
+# Generate Prisma client from realtime's own schema
+RUN cd apps/realtime && npx prisma generate
 
 # Build realtime server
 RUN cd apps/realtime && pnpm build
