@@ -140,12 +140,12 @@ export const useDuelStore = create<DuelState>((set) => ({
 
   setStatus: (status) => set({ status }),
 
-  updatePlayerScore: (playerId, score) =>
+  updatePlayerScore: (role, score) =>
     set((state) => {
-      if (state.creator?.id === playerId) {
+      if (role === 'creator' && state.creator) {
         return { creator: { ...state.creator, score } };
       }
-      if (state.opponent?.id === playerId) {
+      if (role === 'opponent' && state.opponent) {
         return { opponent: { ...state.opponent, score } };
       }
       return {};

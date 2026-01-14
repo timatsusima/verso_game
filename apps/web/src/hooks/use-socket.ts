@@ -28,6 +28,7 @@ export function useSocket(duelId: string | null) {
     setStatus,
     setConnected,
     setError,
+    updatePlayerScore,
   } = useDuelStore();
 
   const hasJoined = useRef(false);
@@ -133,6 +134,13 @@ export function useSocket(duelId: string | null) {
     socket.on('duel:questionResult', (result: QuestionResult) => {
       console.log('Question result:', result);
       addQuestionResult(result);
+      // Update scores from result
+      if (result.creatorScore !== undefined) {
+        updatePlayerScore('creator', result.creatorScore);
+      }
+      if (result.opponentScore !== undefined) {
+        updatePlayerScore('opponent', result.opponentScore);
+      }
     });
 
     socket.on('duel:finished', (result: DuelResult) => {
@@ -172,7 +180,7 @@ export function useSocket(duelId: string | null) {
       socket.off('duel:playerReconnected');
       disconnectSocket();
     };
-  }, [duelId, token, handleStateUpdate, setConnected, setError, setCurrentQuestion, setOpponentAnswered, addQuestionResult, setFinalResult, setStatus, setLocked, setTimeRemaining]);
+  }, [duelId, token, handleStateUpdate, setConnected, setError, setCurrentQuestion, setOpponentAnswered, addQuestionResult, setFinalResult, setStatus, setLocked, setTimeRemaining, updatePlayerScore]);
 
   const submitAnswer = useCallback((questionIndex: number, answerIndex: number) => {
     const socket = getSocket();

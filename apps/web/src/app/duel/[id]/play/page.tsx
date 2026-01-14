@@ -48,6 +48,14 @@ export default function PlayPage() {
   
   const [showResult, setShowResult] = useState(false);
   const [lastResult, setLastResult] = useState<typeof questionResults[0] | null>(null);
+  const [showRematchOptions, setShowRematchOptions] = useState(false);
+  const [isCreatingRematch, setIsCreatingRematch] = useState(false);
+
+  // Reset showResult when question changes
+  useEffect(() => {
+    setShowResult(false);
+    setLastResult(null);
+  }, [currentQuestionIndex]);
 
   // Handle question results
   useEffect(() => {
@@ -84,6 +92,34 @@ export default function PlayPage() {
 
   const handleStartDuel = () => {
     startDuel();
+  };
+
+  const handleRematch = async (sameTopic: boolean) => {
+    setIsCreatingRematch(true);
+    try {
+      const response = await fetch('/api/duel/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          topic: sameTopic ? topic : topic, // Same topic for rematch
+          questionsCount: totalQuestions || 10,
+          language: language,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create rematch');
+      }
+
+      const data = await response.json();
+      router.push(`/duel/${data.duelId}/invite`);
+    } catch (err) {
+      console.error('Rematch error:', err);
+      setIsCreatingRematch(false);
+    }
   };
 
   const isCreator = creator?.id === userId;
@@ -181,9 +217,52 @@ export default function PlayPage() {
         </Card>
 
         <div className="space-y-3 mt-auto">
-          <Button fullWidth size="lg" onClick={() => router.push('/')}>
-            {t('playAgain')}
-          </Button>
+          {!showRematchOptions ? (
+            <>
+              <Button 
+                fullWidth 
+                size="lg" 
+                onClick={() => setShowRematchOptions(true)}
+              >
+                🔄 {language === 'ru' ? 'Повторить' : 'Play Again'}
+              </Button>
+              <Button 
+                fullWidth 
+                variant="secondary"
+                onClick={() => router.push('/')}
+              >
+                {t('backToMenu')}
+              </Button>
+            </>
+          ) : (
+            <>
+              <p className="text-center text-tg-text-secondary mb-2">
+                {language === 'ru' ? 'Выберите вариант:' : 'Choose option:'}
+              </p>
+              <Button 
+                fullWidth 
+                size="lg"
+                onClick={() => handleRematch(true)}
+                isLoading={isCreatingRematch}
+              >
+                🎯 {language === 'ru' ? `Та же тема: ${topic}` : `Same topic: ${topic}`}
+              </Button>
+              <Button 
+                fullWidth 
+                variant="secondary"
+                onClick={() => router.push('/')}
+              >
+                ✏️ {language === 'ru' ? 'Выбрать новую тему' : 'Choose new topic'}
+              </Button>
+              <Button 
+                fullWidth 
+                variant="ghost"
+                onClick={() => setShowRematchOptions(false)}
+              >
+                {language === 'ru' ? 'Назад' : 'Back'}
+              </Button>
+            </>
+          )}
         </div>
       </div>
     );

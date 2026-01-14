@@ -46,24 +46,16 @@ function HomePageContent() {
   const [isLoading, setIsLoading] = useState(false);
   const [isAuthenticating, setIsAuthenticating] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [debugInfo, setDebugInfo] = useState<string>('');
 
   // Handle Telegram start_param (deep link)
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const startParam = window.Telegram?.WebApp?.initDataUnsafe?.start_param;
-      const hasWebApp = !!window.Telegram?.WebApp;
-      
-      // Visual debug info
-      setDebugInfo(`WebApp: ${hasWebApp}, start_param: ${startParam || 'none'}`);
-      
-      console.log('[HomePage] start_param:', startParam);
       
       if (startParam) {
         // Handle join_DUEL_ID format
         if (startParam.startsWith('join_')) {
           const duelId = startParam.replace('join_', '');
-          console.log('[HomePage] Redirecting to join duel:', duelId);
           router.push(`/duel/${duelId}/join`);
           return;
         }
@@ -380,12 +372,6 @@ function HomePageContent() {
         </button>
       </div>
 
-      {/* Debug Info - временно для отладки */}
-      {debugInfo && (
-        <div className="mt-4 p-2 bg-yellow-500/20 rounded text-xs text-center">
-          DEBUG: {debugInfo}
-        </div>
-      )}
     </div>
   );
 }
