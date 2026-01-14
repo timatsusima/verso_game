@@ -203,7 +203,11 @@ export function useSocket(duelId: string | null) {
     }
   }, [duelId]);
 
+  // Get current socket for direct event listening
+  const socket = duelId && token ? getSocket() : null;
+
   return {
+    socket,
     submitAnswer,
     startDuel,
     syncState,

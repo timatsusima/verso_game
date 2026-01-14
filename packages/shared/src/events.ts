@@ -6,6 +6,15 @@ import type {
   Language 
 } from './types.js';
 
+// ============ Duel Player Answer Info ============
+export interface PlayerAnswerInfo {
+  playerId: string;
+  playerName: string;
+  picked: number | null; // 0-3 or null if timeout
+  isCorrect: boolean;
+  timeMs: number | null; // Response time in ms, null if no answer
+}
+
 // ============ Client -> Server Events ============
 export interface ClientToServerEvents {
   // Join a duel room
@@ -54,6 +63,8 @@ export interface ServerToClientEvents {
     timeLimit: number; // 60 seconds
     questionNumber: number; // 1-based for display
     totalQuestions: number;
+    startedAt: number; // ms epoch
+    deadlineAt: number; // startedAt + 60s
   }) => void;
   
   // Timer tick (every second)
@@ -63,19 +74,38 @@ export interface ServerToClientEvents {
     lockTimeRemaining: number | null;
   }) => void;
   
-  // First player answered, 10s countdown starts
+  // Player answered (sent to both players)
+  'duel:playerAnswered': (data: {
+    playerId: string;
+    playerName: string;
+    answeredAt: number; // ms epoch
+    isFirst: boolean;
+  }) => void;
+  
+  // First player answered, 10s countdown starts for second player
+  'duel:secondTimerStarted': (data: {
+    firstPlayerId: string;
+    firstPlayerName: string;
+    secondPlayerId: string;
+    secondPlayerName: string;
+    secondDeadlineAt: number; // ms epoch
+  }) => void;
+  
+  // Legacy event - kept for compatibility
   'duel:locked': (data: {
     firstPlayerId: string;
     lockTimeRemaining: number; // 10 seconds
   }) => void;
   
-  // Opponent answered (but not revealing which answer)
+  // Opponent answered (but not revealing which answer) - legacy
   'duel:opponentAnswered': (data: {
     playerId: string;
   }) => void;
   
-  // Question time ended, reveal result
-  'duel:questionResult': (data: QuestionResult) => void;
+  // Question time ended, reveal result with timing info
+  'duel:questionResult': (data: QuestionResult & {
+    perPlayer: PlayerAnswerInfo[];
+  }) => void;
   
   // Duel finished, reveal all answers and winner
   'duel:finished': (data: DuelResult) => void;

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/auth-store';
 import { useDuelStore } from '@/stores/duel-store';
@@ -12,7 +12,17 @@ import { Timer } from '@/components/ui/timer';
 import { QuestionCard } from '@/components/game/question-card';
 import { ScoreDisplay } from '@/components/game/score-display';
 import { ProgressBar } from '@/components/game/progress-bar';
+import { DuelHeader, type PlayerStatus } from '@/components/game/duel-header';
+import { DuelToasts, useDuelToasts } from '@/components/game/duel-toasts';
+import { SecondTimerOverlay } from '@/components/game/second-timer-overlay';
 import { cn } from '@/lib/utils';
+import type { PlayerAnswerInfo } from '@tg-duel/shared';
+
+interface PlayerTimingInfo {
+  playerId: string;
+  timeMs: number | null;
+  isFirst: boolean;
+}
 
 export default function PlayPage() {
   const params = useParams();
@@ -44,18 +54,98 @@ export default function PlayPage() {
   } = useDuelStore();
 
   const duelId = params.id as string;
-  const { submitAnswer, startDuel } = useSocket(duelId);
+  const { submitAnswer, startDuel, socket } = useSocket(duelId);
   
+  // UI State
   const [showResult, setShowResult] = useState(false);
   const [lastResult, setLastResult] = useState<typeof questionResults[0] | null>(null);
   const [showRematchOptions, setShowRematchOptions] = useState(false);
   const [isCreatingRematch, setIsCreatingRematch] = useState(false);
+  
+  // Duel PvP State
+  const [myStatus, setMyStatus] = useState<PlayerStatus>('thinking');
+  const [rivalStatus, setRivalStatus] = useState<PlayerStatus>('thinking');
+  const [isFirstAnswerer, setIsFirstAnswerer] = useState<string | null>(null);
+  const [showSecondTimer, setShowSecondTimer] = useState(false);
+  const [playerTimings, setPlayerTimings] = useState<PlayerTimingInfo[]>([]);
+  const questionIndexRef = useRef(currentQuestionIndex);
+  
+  // Toasts
+  const { toasts, addToast, removeToast } = useDuelToasts();
 
-  // Reset showResult when question changes
+  const isCreator = creator?.id === userId;
+
+  // Reset state when question changes
   useEffect(() => {
-    setShowResult(false);
-    setLastResult(null);
+    if (currentQuestionIndex !== questionIndexRef.current) {
+      questionIndexRef.current = currentQuestionIndex;
+      setShowResult(false);
+      setLastResult(null);
+      setMyStatus('thinking');
+      setRivalStatus('thinking');
+      setIsFirstAnswerer(null);
+      setShowSecondTimer(false);
+      setPlayerTimings([]);
+    }
   }, [currentQuestionIndex]);
+
+  // Update my status when I answer
+  useEffect(() => {
+    if (hasAnswered) {
+      setMyStatus('answered');
+    }
+  }, [hasAnswered]);
+
+  // Listen for duel events
+  useEffect(() => {
+    if (!socket) return;
+
+    // Player answered event
+    const handlePlayerAnswered = (data: { playerId: string; playerName: string; answeredAt: number; isFirst: boolean }) => {
+      console.log('Player answered:', data);
+      
+      const isMe = data.playerId === userId;
+      
+      if (isMe) {
+        setMyStatus('answered');
+        if (data.isFirst) {
+          setIsFirstAnswerer(data.playerId);
+          addToast(t('youAnsweredFirst'), 'info');
+        }
+      } else {
+        setRivalStatus('answered');
+        if (data.isFirst) {
+          setIsFirstAnswerer(data.playerId);
+          addToast(t('opponentAnsweredFirst'), 'warning');
+        } else {
+          addToast(t('opponentPickedAnswer'), 'info');
+        }
+      }
+    };
+
+    // Second timer started (10s mode)
+    const handleSecondTimerStarted = (data: { 
+      firstPlayerId: string; 
+      secondPlayerId: string; 
+      secondDeadlineAt: number;
+    }) => {
+      console.log('Second timer started:', data);
+      
+      // Show overlay only for second player
+      if (data.secondPlayerId === userId) {
+        setShowSecondTimer(true);
+        addToast(t('hurryUpToast'), 'danger', 3000);
+      }
+    };
+
+    socket.on('duel:playerAnswered', handlePlayerAnswered);
+    socket.on('duel:secondTimerStarted', handleSecondTimerStarted);
+
+    return () => {
+      socket.off('duel:playerAnswered', handlePlayerAnswered);
+      socket.off('duel:secondTimerStarted', handleSecondTimerStarted);
+    };
+  }, [socket, userId, addToast, t]);
 
   // Handle question results
   useEffect(() => {
@@ -64,6 +154,30 @@ export default function PlayPage() {
       if (latest.questionIndex === currentQuestionIndex) {
         setLastResult(latest);
         setShowResult(true);
+        setShowSecondTimer(false);
+        
+        // Extract player timings if available
+        const perPlayer = (latest as unknown as { perPlayer?: PlayerAnswerInfo[] }).perPlayer;
+        if (perPlayer) {
+          const timings: PlayerTimingInfo[] = perPlayer.map((p, idx) => ({
+            playerId: p.playerId,
+            timeMs: p.timeMs,
+            isFirst: idx === 0 && p.timeMs !== null && perPlayer.every((op, i) => i === idx || op.timeMs === null || p.timeMs! <= op.timeMs!),
+          }));
+          setPlayerTimings(timings);
+        }
+
+        // Update statuses based on answers
+        const creatorAnswer = latest.creatorAnswer;
+        const opponentAnswer = latest.opponentAnswer;
+        
+        if (isCreator) {
+          setMyStatus(creatorAnswer !== null ? 'answered' : 'didntAnswer');
+          setRivalStatus(opponentAnswer !== null ? 'answered' : 'didntAnswer');
+        } else {
+          setMyStatus(opponentAnswer !== null ? 'answered' : 'didntAnswer');
+          setRivalStatus(creatorAnswer !== null ? 'answered' : 'didntAnswer');
+        }
         
         // Hide result after 3 seconds
         const timer = setTimeout(() => {
@@ -74,7 +188,7 @@ export default function PlayPage() {
         return () => clearTimeout(timer);
       }
     }
-  }, [questionResults, currentQuestionIndex]);
+  }, [questionResults, currentQuestionIndex, isCreator]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -104,10 +218,10 @@ export default function PlayPage() {
           'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
-          topic: sameTopic ? topic : topic, // Same topic for rematch
+          topic: sameTopic ? topic : topic,
           questionsCount: totalQuestions || 10,
           language: language,
-          difficulty: 'confident', // Default difficulty for rematch
+          difficulty: 'confident',
         }),
       });
 
@@ -123,16 +237,12 @@ export default function PlayPage() {
     }
   };
 
-  const isCreator = creator?.id === userId;
   const canStart = status === 'ready' && isCreator && opponent;
 
-  // Determine my correct answer for result display
-  const getMyCorrectAnswer = () => {
-    if (!lastResult) return null;
-    if (isCreator) {
-      return lastResult.creatorCorrect ? lastResult.correctIndex : null;
-    }
-    return lastResult.opponentCorrect ? lastResult.correctIndex : null;
+  // Get timing for a player
+  const getPlayerTiming = (playerId: string) => {
+    const timing = playerTimings.find(t => t.playerId === playerId);
+    return timing?.timeMs ?? null;
   };
 
   // Loading / Connection state
@@ -318,23 +428,47 @@ export default function PlayPage() {
     );
   }
 
+  // Determine urgency for timer
+  const displayTime = isLocked && lockTimeRemaining !== null ? lockTimeRemaining : timeRemaining;
+  const isUrgent = isLocked || displayTime <= 10;
+  const isCritical = displayTime <= 3;
+
   // Game in progress
   return (
-    <div className="flex-1 flex flex-col p-4">
-      {/* Score */}
-      <ScoreDisplay
-        player1={{
+    <div className={cn(
+      'flex-1 flex flex-col p-4 transition-all duration-300',
+      showSecondTimer && 'border-2 border-orange-500 rounded-2xl animate-border-urgent'
+    )}>
+      {/* Toasts */}
+      <DuelToasts toasts={toasts} onRemove={removeToast} />
+      
+      {/* 10 Second Overlay */}
+      <SecondTimerOverlay 
+        isActive={showSecondTimer && !hasAnswered} 
+        timeRemaining={lockTimeRemaining ?? 10}
+        onClose={() => setShowSecondTimer(false)}
+      />
+
+      {/* Duel Header with PvP indicators */}
+      <DuelHeader
+        creator={{
+          id: creator?.id || '',
           name: creator?.name || 'Player 1',
           score: creator?.score || 0,
-          isMe: isCreator,
-          hasAnswered: isCreator ? hasAnswered : opponentAnswered,
+          status: isCreator ? myStatus : rivalStatus,
+          isFirst: isFirstAnswerer === creator?.id,
+          timeMs: showResult ? getPlayerTiming(creator?.id || '') : undefined,
         }}
-        player2={{
+        opponent={{
+          id: opponent?.id || '',
           name: opponent?.name || 'Player 2',
           score: opponent?.score || 0,
-          isMe: !isCreator,
-          hasAnswered: !isCreator ? hasAnswered : opponentAnswered,
+          status: isCreator ? rivalStatus : myStatus,
+          isFirst: isFirstAnswerer === opponent?.id,
+          timeMs: showResult ? getPlayerTiming(opponent?.id || '') : undefined,
         }}
+        myId={userId || ''}
+        showResult={showResult}
         className="mb-4"
       />
 
@@ -342,23 +476,38 @@ export default function PlayPage() {
       <ProgressBar
         current={currentQuestionIndex}
         total={totalQuestions}
-        className="mb-4"
+        className={cn('mb-4', isLocked && 'animate-progress-pulse')}
       />
 
       {/* Timer */}
-      <div className="flex justify-center mb-6">
-        <Timer
-          seconds={isLocked && lockTimeRemaining ? lockTimeRemaining : timeRemaining}
-          maxSeconds={isLocked ? 10 : 60}
-          size="md"
-        />
+      <div className="flex justify-center mb-4">
+        <div className={cn(
+          'transition-all duration-300',
+          isUrgent && 'scale-110',
+          isCritical && 'animate-timer-urgent'
+        )}>
+          <Timer
+            seconds={displayTime}
+            maxSeconds={isLocked ? 10 : 60}
+            size="md"
+            variant={isCritical ? 'danger' : isLocked ? 'warning' : 'default'}
+          />
+        </div>
       </div>
 
-      {/* Lock indicator */}
-      {isLocked && (
-        <div className="text-center mb-4 animate-pulse">
-          <p className="text-duel-warning font-medium">
-            ⚡ {t('hurryUp')}
+      {/* Lock indicator with enhanced urgency */}
+      {isLocked && !hasAnswered && (
+        <div className={cn(
+          'text-center mb-4 py-2 px-4 rounded-full mx-auto',
+          'bg-gradient-to-r from-orange-500/20 to-red-500/20',
+          'border border-orange-500/50',
+          'animate-pulse'
+        )}>
+          <p className={cn(
+            'font-bold',
+            isCritical ? 'text-red-400' : 'text-orange-400'
+          )}>
+            ⚡ {t('hurryUp')} — {displayTime} {t('seconds')}!
           </p>
         </div>
       )}
@@ -375,16 +524,49 @@ export default function PlayPage() {
         />
       )}
 
-      {/* Answer status */}
+      {/* Answer status with timing info */}
       {hasAnswered && !showResult && (
         <div className="mt-4 text-center">
-          <p className="text-duel-correct">✓ {t('youAnswered')}</p>
+          <p className="text-green-400 font-medium">✓ {t('youAnswered')}</p>
           {!opponentAnswered && (
-            <p className="text-tg-text-secondary text-sm mt-1">
-              {t('waiting')}
+            <p className="text-tg-text-secondary text-sm mt-1 animate-pulse">
+              {t('waitingForOpponentAnswer')}
             </p>
           )}
         </div>
+      )}
+
+      {/* Who was faster - show after result */}
+      {showResult && playerTimings.length > 0 && (
+        <Card variant="glass" className="mt-4 py-3 animate-slide-up">
+          <p className="text-center text-xs text-tg-hint mb-2">{t('whoWasFaster')}</p>
+          <div className="flex justify-around text-sm">
+            <div className="text-center">
+              <p className="text-tg-text-secondary">{t('yourTime')}</p>
+              <p className={cn(
+                'font-bold',
+                getPlayerTiming(userId || '') !== null ? 'text-white' : 'text-red-400'
+              )}>
+                {getPlayerTiming(userId || '') !== null 
+                  ? `${(getPlayerTiming(userId || '')! / 1000).toFixed(1)}с`
+                  : t('noAnswer')
+                }
+              </p>
+            </div>
+            <div className="text-center">
+              <p className="text-tg-text-secondary">{t('opponentTime')}</p>
+              <p className={cn(
+                'font-bold',
+                getPlayerTiming(isCreator ? opponent?.id || '' : creator?.id || '') !== null ? 'text-white' : 'text-red-400'
+              )}>
+                {getPlayerTiming(isCreator ? opponent?.id || '' : creator?.id || '') !== null 
+                  ? `${(getPlayerTiming(isCreator ? opponent?.id || '' : creator?.id || '')! / 1000).toFixed(1)}с`
+                  : t('noAnswer')
+                }
+              </p>
+            </div>
+          </div>
+        </Card>
       )}
     </div>
   );

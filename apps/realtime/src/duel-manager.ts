@@ -9,6 +9,7 @@ import type {
   QuestionResult,
   DuelResult,
   DuelStatus,
+  PlayerAnswerInfo,
 } from '@tg-duel/shared';
 import { 
   QUESTION_TIME_LIMIT, 
@@ -280,6 +281,8 @@ export class DuelManager {
     state.firstAnswerPlayerId = null;
     state.questionStartTime = Date.now();
 
+    const deadlineAt = state.questionStartTime + QUESTION_TIME_LIMIT * 1000;
+
     // Send sanitized question (without correct answer)
     this.io.to(this.getRoomName(state.duelId)).emit('duel:question', {
       question: {
@@ -293,6 +296,8 @@ export class DuelManager {
       timeLimit: QUESTION_TIME_LIMIT,
       questionNumber: state.currentQuestionIndex + 1,
       totalQuestions: state.questionsCount,
+      startedAt: state.questionStartTime,
+      deadlineAt,
     });
 
     // Start timer
@@ -356,13 +361,24 @@ export class DuelManager {
     // Check if already answered
     if (player.answers.has(questionIndex)) return;
 
+    const answeredAt = Date.now();
+    const isFirst = !state.isLocked;
+
     // Record answer
     player.answers.set(questionIndex, {
       answerIndex,
-      timestamp: Date.now(),
+      timestamp: answeredAt,
     });
 
-    // Notify opponent that this player answered
+    // Emit playerAnswered event to ALL players in the room
+    this.io.to(this.getRoomName(duelId)).emit('duel:playerAnswered', {
+      playerId: odId,
+      playerName: player.odName,
+      answeredAt,
+      isFirst,
+    });
+
+    // Also emit legacy event for compatibility
     const opponentSocket = isCreator ? state.opponent?.odSocket : state.creator.odSocket;
     if (opponentSocket) {
       this.io.to(opponentSocket).emit('duel:opponentAnswered', { playerId: odId });
@@ -371,9 +387,25 @@ export class DuelManager {
     // Check if this is first answer (start lock timer)
     if (!state.isLocked) {
       state.isLocked = true;
-      state.lockTime = Date.now();
+      state.lockTime = answeredAt;
       state.firstAnswerPlayerId = odId;
 
+      // Determine who is the second player
+      const secondPlayer = isCreator ? state.opponent : state.creator;
+      const secondDeadlineAt = answeredAt + LOCK_TIME_LIMIT * 1000;
+
+      // Emit new second timer event
+      if (secondPlayer) {
+        this.io.to(this.getRoomName(duelId)).emit('duel:secondTimerStarted', {
+          firstPlayerId: odId,
+          firstPlayerName: player.odName,
+          secondPlayerId: secondPlayer.odId,
+          secondPlayerName: secondPlayer.odName,
+          secondDeadlineAt,
+        });
+      }
+
+      // Also emit legacy locked event
       this.io.to(this.getRoomName(duelId)).emit('duel:locked', {
         firstPlayerId: odId,
         lockTimeRemaining: LOCK_TIME_LIMIT,
@@ -415,7 +447,7 @@ export class DuelManager {
     if (opponentCorrect && state.opponent) state.opponent.score++;
 
     // Save answers to database
-    const answerPromises: Promise<any>[] = [];
+    const answerPromises: Promise<unknown>[] = [];
     
     if (creatorAnswer) {
       answerPromises.push(
@@ -449,8 +481,29 @@ export class DuelManager {
 
     await Promise.all(answerPromises);
 
+    // Build perPlayer info for enhanced result
+    const perPlayer: PlayerAnswerInfo[] = [
+      {
+        playerId: state.creator.odId,
+        playerName: state.creator.odName,
+        picked: creatorAnswer?.answerIndex ?? null,
+        isCorrect: creatorCorrect,
+        timeMs: creatorAnswer ? creatorAnswer.timestamp - state.questionStartTime : null,
+      },
+    ];
+
+    if (state.opponent) {
+      perPlayer.push({
+        playerId: state.opponent.odId,
+        playerName: state.opponent.odName,
+        picked: opponentAnswer?.answerIndex ?? null,
+        isCorrect: opponentCorrect,
+        timeMs: opponentAnswer ? opponentAnswer.timestamp - state.questionStartTime : null,
+      });
+    }
+
     // Build result
-    const result: QuestionResult = {
+    const result: QuestionResult & { perPlayer: PlayerAnswerInfo[] } = {
       questionIndex: state.currentQuestionIndex,
       correctIndex,
       creatorAnswer: creatorAnswer?.answerIndex ?? null,
@@ -459,6 +512,7 @@ export class DuelManager {
       opponentCorrect,
       creatorScore: state.creator.score,
       opponentScore: state.opponent?.score ?? 0,
+      perPlayer,
     };
 
     // Send result
