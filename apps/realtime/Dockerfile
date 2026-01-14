@@ -1,12 +1,15 @@
 FROM node:20-slim
 
+# Install OpenSSL for Prisma
+RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+
 # Install pnpm
 RUN npm install -g pnpm
 
 WORKDIR /app
 
 # Copy workspace files from root
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml tsconfig.json ./
 COPY packages/shared ./packages/shared
 COPY apps/realtime ./apps/realtime
 
