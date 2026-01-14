@@ -107,6 +107,7 @@ export default function PlayPage() {
           topic: sameTopic ? topic : topic, // Same topic for rematch
           questionsCount: totalQuestions || 10,
           language: language,
+          difficulty: 'confident', // Default difficulty for rematch
         }),
       });
 

@@ -13,6 +13,8 @@ export interface User {
 
 export type Language = 'ru' | 'en';
 
+export type DifficultyLevel = 'novice' | 'confident' | 'advanced' | 'expert' | 'master';
+
 // ============ Question ============
 export interface Question {
   id: string;
@@ -102,6 +104,7 @@ export interface CreateDuelRequest {
   topic: string;
   questionsCount: 10 | 20 | 30;
   language: Language;
+  difficulty: DifficultyLevel;
 }
 
 export interface CreateDuelResponse {

@@ -1,24 +1,44 @@
 import OpenAI from 'openai';
 import crypto from 'crypto';
-import type { QuestionWithAnswer, Language } from '@tg-duel/shared';
+import type { QuestionWithAnswer, Language, DifficultyLevel } from '@tg-duel/shared';
 import { OpenAIResponseSchema } from '@tg-duel/shared';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-function getSystemPrompt(language: Language): string {
+const DIFFICULTY_DESCRIPTIONS = {
+  ru: {
+    novice: 'НОВИЧОК - очень простые вопросы, базовые факты, которые знает большинство людей. Подходит для детей или тех, кто только начинает изучать тему.',
+    confident: 'УВЕРЕННЫЙ - средние вопросы, требующие базовых знаний по теме. Подходит для людей с общим представлением о предмете.',
+    advanced: 'ПРОДВИНУТЫЙ - сложные вопросы, требующие хороших знаний темы. Подходит для тех, кто увлекается данной темой.',
+    expert: 'ЭКСПЕРТ - очень сложные вопросы, требующие глубоких знаний и понимания нюансов. Для настоящих знатоков темы.',
+    master: 'МАСТЕР - экстремально сложные вопросы, малоизвестные факты, детали которые знают только специалисты. Максимальная сложность.',
+  },
+  en: {
+    novice: 'NOVICE - very easy questions, basic facts that most people know. Suitable for beginners or children.',
+    confident: 'CONFIDENT - medium questions requiring basic knowledge of the topic. Suitable for people with general understanding.',
+    advanced: 'ADVANCED - hard questions requiring good knowledge of the topic. For enthusiasts of the subject.',
+    expert: 'EXPERT - very hard questions requiring deep knowledge and understanding of nuances. For true connoisseurs.',
+    master: 'MASTER - extremely difficult questions, obscure facts known only to specialists. Maximum difficulty.',
+  },
+};
+
+function getSystemPrompt(language: Language, difficulty: DifficultyLevel): string {
+  const difficultyDesc = DIFFICULTY_DESCRIPTIONS[language][difficulty];
+  
   if (language === 'ru') {
     return `Ты — генератор викторины. Создавай интересные и увлекательные вопросы на указанную тему.
+
+УРОВЕНЬ СЛОЖНОСТИ: ${difficultyDesc}
 
 ПРАВИЛА:
 1. Каждый вопрос должен иметь ровно 4 варианта ответа (A, B, C, D)
 2. Только один вариант должен быть правильным
 3. Неправильные варианты должны быть правдоподобными, но явно неверными
-4. Вопросы должны быть разнообразными по сложности
-5. Избегай слишком очевидных или слишком сложных вопросов
-6. Все вопросы должны быть на русском языке
-7. Если тема связана с визуальными объектами (картины, логотипы, флаги и т.д.), добавь поисковый запрос для изображения в поле imageSearchQuery
+4. ВСЕ вопросы должны соответствовать указанному уровню сложности
+5. Все вопросы должны быть на русском языке
+6. Если тема связана с визуальными объектами (картины, логотипы, флаги и т.д.), добавь поисковый запрос для изображения в поле imageSearchQuery
 
 ФОРМАТ ОТВЕТА (строго JSON):
 {
@@ -37,14 +57,15 @@ correctIndex: 0 = A, 1 = B, 2 = C, 3 = D`;
 
   return `You are a quiz generator. Create interesting and engaging questions on the given topic.
 
+DIFFICULTY LEVEL: ${difficultyDesc}
+
 RULES:
 1. Each question must have exactly 4 answer options (A, B, C, D)
 2. Only one option should be correct
 3. Wrong options should be plausible but clearly incorrect
-4. Questions should vary in difficulty
-5. Avoid questions that are too obvious or too obscure
-6. All questions should be in English
-7. If the topic involves visual objects (paintings, logos, flags, etc.), add an image search query in the imageSearchQuery field
+4. ALL questions must match the specified difficulty level
+5. All questions should be in English
+6. If the topic involves visual objects (paintings, logos, flags, etc.), add an image search query in the imageSearchQuery field
 
 RESPONSE FORMAT (strict JSON):
 {
@@ -61,22 +82,43 @@ RESPONSE FORMAT (strict JSON):
 correctIndex: 0 = A, 1 = B, 2 = C, 3 = D`;
 }
 
-function getUserPrompt(topic: string, count: number, language: Language): string {
+const DIFFICULTY_NAMES = {
+  ru: {
+    novice: 'Новичок',
+    confident: 'Уверенный', 
+    advanced: 'Продвинутый',
+    expert: 'Эксперт',
+    master: 'Мастер',
+  },
+  en: {
+    novice: 'Novice',
+    confident: 'Confident',
+    advanced: 'Advanced',
+    expert: 'Expert',
+    master: 'Master',
+  },
+};
+
+function getUserPrompt(topic: string, count: number, language: Language, difficulty: DifficultyLevel): string {
+  const diffName = DIFFICULTY_NAMES[language][difficulty];
+  
   if (language === 'ru') {
     return `Создай ${count} вопросов на тему: "${topic}"
+Уровень сложности: ${diffName}
 
 Убедись, что:
 - Вопросы охватывают разные аспекты темы
-- Сложность варьируется от лёгкой до сложной
+- ВСЕ вопросы соответствуют уровню "${diffName}"
 - Варианты ответов не слишком длинные (макс 50 символов каждый)
 - Правильный ответ не всегда на одной и той же позиции`;
   }
 
   return `Create ${count} questions on the topic: "${topic}"
+Difficulty level: ${diffName}
 
 Make sure that:
 - Questions cover different aspects of the topic
-- Difficulty varies from easy to hard
+- ALL questions match the "${diffName}" difficulty level
 - Answer options are not too long (max 50 characters each)
 - The correct answer is not always in the same position`;
 }
@@ -93,13 +135,14 @@ export interface GeneratedPack {
 export async function generateQuestions(
   topic: string,
   count: 10 | 20 | 30,
-  language: Language
+  language: Language,
+  difficulty: DifficultyLevel
 ): Promise<GeneratedPack> {
   const response = await openai.chat.completions.create({
     model: 'gpt-4o-mini',
     messages: [
-      { role: 'system', content: getSystemPrompt(language) },
-      { role: 'user', content: getUserPrompt(topic, count, language) },
+      { role: 'system', content: getSystemPrompt(language, difficulty) },
+      { role: 'user', content: getUserPrompt(topic, count, language, difficulty) },
     ],
     response_format: { type: 'json_object' },
     temperature: 0.8,

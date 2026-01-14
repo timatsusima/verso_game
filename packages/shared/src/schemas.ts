@@ -3,6 +3,9 @@ import { z } from 'zod';
 // ============ Language ============
 export const LanguageSchema = z.enum(['ru', 'en']);
 
+// ============ Difficulty ============
+export const DifficultySchema = z.enum(['novice', 'confident', 'advanced', 'expert', 'master']);
+
 // ============ Question Schemas ============
 export const QuestionWithAnswerSchema = z.object({
   id: z.string(),
@@ -32,6 +35,7 @@ export const CreateDuelSchema = z.object({
   topic: z.string().min(1).max(200),
   questionsCount: z.union([z.literal(10), z.literal(20), z.literal(30)]),
   language: LanguageSchema,
+  difficulty: DifficultySchema,
 });
 
 export const AuthTelegramSchema = z.object({

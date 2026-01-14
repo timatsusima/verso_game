@@ -32,6 +32,7 @@ model Duel {
   topic          String
   questionsCount Int       @default(10)
   language       String    @default("en")
+  difficulty     String    @default("confident") // novice, confident, advanced, expert, master
   status         String    @default("waiting") // waiting, ready, in_progress, finished
   
   creatorId      String

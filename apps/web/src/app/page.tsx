@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Card } from '@/components/ui/card';
 import { useTranslations } from '@/hooks/use-translations';
-import type { Language } from '@tg-duel/shared';
+import type { Language, DifficultyLevel } from '@tg-duel/shared';
 
 function LoadingSpinner() {
   return (
@@ -43,6 +43,7 @@ function HomePageContent() {
   const [showLanguageSelect, setShowLanguageSelect] = useState(false);
   const [topic, setTopic] = useState('');
   const [questionsCount, setQuestionsCount] = useState<10 | 20 | 30>(10);
+  const [difficulty, setDifficulty] = useState<DifficultyLevel>('confident');
   const [isLoading, setIsLoading] = useState(false);
   const [isAuthenticating, setIsAuthenticating] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -240,6 +241,7 @@ function HomePageContent() {
           topic: topic.trim(),
           questionsCount,
           language,
+          difficulty,
         }),
       });
 
@@ -342,6 +344,20 @@ function HomePageContent() {
             ]}
             value={questionsCount}
             onChange={(v) => setQuestionsCount(v as 10 | 20 | 30)}
+          />
+
+          {/* Difficulty */}
+          <Select
+            label={language === 'ru' ? 'Сложность' : 'Difficulty'}
+            options={[
+              { value: 'novice', label: language === 'ru' ? '🌱 Новичок' : '🌱 Novice' },
+              { value: 'confident', label: language === 'ru' ? '📚 Уверенный' : '📚 Confident' },
+              { value: 'advanced', label: language === 'ru' ? '🎯 Продвинутый' : '🎯 Advanced' },
+              { value: 'expert', label: language === 'ru' ? '🏆 Эксперт' : '🏆 Expert' },
+              { value: 'master', label: language === 'ru' ? '👑 Мастер' : '👑 Master' },
+            ]}
+            value={difficulty}
+            onChange={(v) => setDifficulty(v as DifficultyLevel)}
           />
 
           {/* Create Button */}

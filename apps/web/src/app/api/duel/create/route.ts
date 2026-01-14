@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { topic, questionsCount, language } = parsed.data;
+    const { topic, questionsCount, language, difficulty } = parsed.data;
 
     // Validate topic
     if (topic.trim().length === 0) {
@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
     // Generate questions using OpenAI
     let pack;
     try {
-      pack = await generateQuestions(topic, questionsCount, language);
+      pack = await generateQuestions(topic, questionsCount, language, difficulty);
     } catch (error) {
       console.error('OpenAI error:', error);
       return NextResponse.json(
@@ -63,6 +63,7 @@ export async function POST(request: NextRequest) {
         topic,
         questionsCount,
         language,
+        difficulty,
         status: 'waiting',
         creatorId: payload.userId,
         pack: {
