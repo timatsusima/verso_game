@@ -349,12 +349,13 @@ function HomePageContent() {
           {/* Difficulty */}
           <Select
             label={language === 'ru' ? 'Сложность' : 'Difficulty'}
+            variant="dropdown"
             options={[
-              { value: 'novice', label: language === 'ru' ? '🌱 Новичок' : '🌱 Novice' },
-              { value: 'confident', label: language === 'ru' ? '📚 Уверенный' : '📚 Confident' },
-              { value: 'advanced', label: language === 'ru' ? '🎯 Продвинутый' : '🎯 Advanced' },
-              { value: 'expert', label: language === 'ru' ? '🏆 Эксперт' : '🏆 Expert' },
-              { value: 'master', label: language === 'ru' ? '👑 Мастер' : '👑 Master' },
+              { value: 'novice', label: language === 'ru' ? '🌱 Новичок — базовые вопросы' : '🌱 Novice — basic questions' },
+              { value: 'confident', label: language === 'ru' ? '📚 Уверенный — средняя сложность' : '📚 Confident — medium difficulty' },
+              { value: 'advanced', label: language === 'ru' ? '🎯 Продвинутый — сложные вопросы' : '🎯 Advanced — hard questions' },
+              { value: 'expert', label: language === 'ru' ? '🏆 Эксперт — очень сложно' : '🏆 Expert — very hard' },
+              { value: 'master', label: language === 'ru' ? '👑 Мастер — максимальная сложность' : '👑 Master — maximum difficulty' },
             ]}
             value={difficulty}
             onChange={(v) => setDifficulty(v as DifficultyLevel)}
