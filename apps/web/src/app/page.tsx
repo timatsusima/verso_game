@@ -43,7 +43,7 @@ function HomePageContent() {
   const [showLanguageSelect, setShowLanguageSelect] = useState(false);
   const [topic, setTopic] = useState('');
   const [questionsCount, setQuestionsCount] = useState<10 | 20 | 30>(10);
-  const [difficulty, setDifficulty] = useState<DifficultyLevel>('confident');
+  const [difficulty, setDifficulty] = useState<DifficultyLevel>('medium');
   const [isLoading, setIsLoading] = useState(false);
   const [isAuthenticating, setIsAuthenticating] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -349,13 +349,10 @@ function HomePageContent() {
           {/* Difficulty */}
           <Select
             label={language === 'ru' ? 'Сложность' : 'Difficulty'}
-            variant="dropdown"
             options={[
-              { value: 'novice', label: language === 'ru' ? '🌱 Новичок — базовые вопросы' : '🌱 Novice — basic questions' },
-              { value: 'confident', label: language === 'ru' ? '📚 Уверенный — средняя сложность' : '📚 Confident — medium difficulty' },
-              { value: 'advanced', label: language === 'ru' ? '🎯 Продвинутый — сложные вопросы' : '🎯 Advanced — hard questions' },
-              { value: 'expert', label: language === 'ru' ? '🏆 Эксперт — очень сложно' : '🏆 Expert — very hard' },
-              { value: 'master', label: language === 'ru' ? '👑 Мастер — максимальная сложность' : '👑 Master — maximum difficulty' },
+              { value: 'easy', label: language === 'ru' ? '🌱 Легко' : '🌱 Easy' },
+              { value: 'medium', label: language === 'ru' ? '📚 Средне' : '📚 Medium' },
+              { value: 'hard', label: language === 'ru' ? '🔥 Сложно' : '🔥 Hard' },
             ]}
             value={difficulty}
             onChange={(v) => setDifficulty(v as DifficultyLevel)}

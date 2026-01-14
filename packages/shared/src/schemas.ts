@@ -4,7 +4,7 @@ import { z } from 'zod';
 export const LanguageSchema = z.enum(['ru', 'en']);
 
 // ============ Difficulty ============
-export const DifficultySchema = z.enum(['novice', 'confident', 'advanced', 'expert', 'master']);
+export const DifficultySchema = z.enum(['easy', 'medium', 'hard']);
 
 // ============ Question Schemas ============
 export const QuestionWithAnswerSchema = z.object({

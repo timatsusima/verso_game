@@ -13,7 +13,7 @@ export interface User {
 
 export type Language = 'ru' | 'en';
 
-export type DifficultyLevel = 'novice' | 'confident' | 'advanced' | 'expert' | 'master';
+export type DifficultyLevel = 'easy' | 'medium' | 'hard';
 
 // ============ Question ============
 export interface Question {

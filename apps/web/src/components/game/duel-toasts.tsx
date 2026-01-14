@@ -71,7 +71,16 @@ export function useDuelToasts() {
 
   const addToast = (message: string, type: DuelToast['type'] = 'info', duration = 2500) => {
     const id = `${Date.now()}-${Math.random()}`;
-    setToasts((prev) => [...prev, { id, message, type, duration }]);
+    
+    setToasts((prev) => {
+      // Prevent duplicate messages and limit to max 2 toasts
+      if (prev.some(t => t.message === message)) {
+        return prev;
+      }
+      const newToasts = [...prev, { id, message, type, duration }];
+      // Keep only last 2 toasts
+      return newToasts.slice(-2);
+    });
     
     // Vibrate on warning/danger toasts
     if ((type === 'warning' || type === 'danger') && typeof navigator !== 'undefined' && navigator.vibrate) {
@@ -83,5 +92,9 @@ export function useDuelToasts() {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
-  return { toasts, addToast, removeToast };
+  const clearToasts = () => {
+    setToasts([]);
+  };
+
+  return { toasts, addToast, removeToast, clearToasts };
 }

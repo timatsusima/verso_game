@@ -9,18 +9,14 @@ const openai = new OpenAI({
 
 const DIFFICULTY_DESCRIPTIONS = {
   ru: {
-    novice: 'НОВИЧОК - очень простые вопросы, базовые факты, которые знает большинство людей. Подходит для детей или тех, кто только начинает изучать тему.',
-    confident: 'УВЕРЕННЫЙ - средние вопросы, требующие базовых знаний по теме. Подходит для людей с общим представлением о предмете.',
-    advanced: 'ПРОДВИНУТЫЙ - сложные вопросы, требующие хороших знаний темы. Подходит для тех, кто увлекается данной темой.',
-    expert: 'ЭКСПЕРТ - очень сложные вопросы, требующие глубоких знаний и понимания нюансов. Для настоящих знатоков темы.',
-    master: 'МАСТЕР - экстремально сложные вопросы, малоизвестные факты, детали которые знают только специалисты. Максимальная сложность.',
+    easy: 'ЛЕГКО - простые вопросы, базовые факты, которые знает большинство людей. Подходит для новичков.',
+    medium: 'СРЕДНЕ - вопросы средней сложности, требующие базовых знаний по теме. Для людей с общим представлением о предмете.',
+    hard: 'СЛОЖНО - сложные вопросы, требующие глубоких знаний и понимания нюансов. Для настоящих знатоков темы.',
   },
   en: {
-    novice: 'NOVICE - very easy questions, basic facts that most people know. Suitable for beginners or children.',
-    confident: 'CONFIDENT - medium questions requiring basic knowledge of the topic. Suitable for people with general understanding.',
-    advanced: 'ADVANCED - hard questions requiring good knowledge of the topic. For enthusiasts of the subject.',
-    expert: 'EXPERT - very hard questions requiring deep knowledge and understanding of nuances. For true connoisseurs.',
-    master: 'MASTER - extremely difficult questions, obscure facts known only to specialists. Maximum difficulty.',
+    easy: 'EASY - simple questions, basic facts that most people know. Suitable for beginners.',
+    medium: 'MEDIUM - medium difficulty questions requiring basic knowledge of the topic. For people with general understanding.',
+    hard: 'HARD - difficult questions requiring deep knowledge and understanding of nuances. For true connoisseurs.',
   },
 };
 
@@ -84,18 +80,14 @@ correctIndex: 0 = A, 1 = B, 2 = C, 3 = D`;
 
 const DIFFICULTY_NAMES = {
   ru: {
-    novice: 'Новичок',
-    confident: 'Уверенный', 
-    advanced: 'Продвинутый',
-    expert: 'Эксперт',
-    master: 'Мастер',
+    easy: 'Легко',
+    medium: 'Средне',
+    hard: 'Сложно',
   },
   en: {
-    novice: 'Novice',
-    confident: 'Confident',
-    advanced: 'Advanced',
-    expert: 'Expert',
-    master: 'Master',
+    easy: 'Easy',
+    medium: 'Medium',
+    hard: 'Hard',
   },
 };
 

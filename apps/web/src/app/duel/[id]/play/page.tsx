@@ -71,7 +71,7 @@ export default function PlayPage() {
   const questionIndexRef = useRef(currentQuestionIndex);
   
   // Toasts
-  const { toasts, addToast, removeToast } = useDuelToasts();
+  const { toasts, addToast, removeToast, clearToasts } = useDuelToasts();
 
   const isCreator = creator?.id === userId;
 
@@ -86,8 +86,9 @@ export default function PlayPage() {
       setIsFirstAnswerer(null);
       setShowSecondTimer(false);
       setPlayerTimings([]);
+      clearToasts(); // Clear all toasts on new question
     }
-  }, [currentQuestionIndex]);
+  }, [currentQuestionIndex, clearToasts]);
 
   // Update my status when I answer
   useEffect(() => {
@@ -221,7 +222,7 @@ export default function PlayPage() {
           topic: sameTopic ? topic : topic,
           questionsCount: totalQuestions || 10,
           language: language,
-          difficulty: 'confident',
+          difficulty: 'medium',
         }),
       });
 
