@@ -49,16 +49,24 @@ function HomePageContent() {
 
   // Handle Telegram start_param (deep link)
   useEffect(() => {
-    if (typeof window !== 'undefined' && window.Telegram?.WebApp?.initDataUnsafe?.start_param) {
-      const startParam = window.Telegram.WebApp.initDataUnsafe.start_param;
-      console.log('[HomePage] start_param:', startParam);
+    if (typeof window !== 'undefined') {
+      // Debug: log all Telegram data
+      console.log('[HomePage] Telegram WebApp:', window.Telegram?.WebApp);
+      console.log('[HomePage] initDataUnsafe:', window.Telegram?.WebApp?.initDataUnsafe);
+      console.log('[HomePage] start_param:', window.Telegram?.WebApp?.initDataUnsafe?.start_param);
       
-      // Handle join_DUEL_ID format
-      if (startParam.startsWith('join_')) {
-        const duelId = startParam.replace('join_', '');
-        console.log('[HomePage] Redirecting to join duel:', duelId);
-        router.push(`/duel/${duelId}/join`);
-        return;
+      const startParam = window.Telegram?.WebApp?.initDataUnsafe?.start_param;
+      
+      if (startParam) {
+        console.log('[HomePage] Found start_param:', startParam);
+        
+        // Handle join_DUEL_ID format
+        if (startParam.startsWith('join_')) {
+          const duelId = startParam.replace('join_', '');
+          console.log('[HomePage] Redirecting to join duel:', duelId);
+          router.push(`/duel/${duelId}/join`);
+          return;
+        }
       }
     }
   }, [router]);
