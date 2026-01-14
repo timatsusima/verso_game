@@ -146,6 +146,8 @@ export interface QuestionResult {
   opponentAnswer: number | null;
   creatorCorrect: boolean;
   opponentCorrect: boolean;
+  creatorScore: number;
+  opponentScore: number;
 }
 
 export interface DuelResult {

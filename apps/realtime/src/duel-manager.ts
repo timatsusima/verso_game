@@ -457,6 +457,8 @@ export class DuelManager {
       opponentAnswer: opponentAnswer?.answerIndex ?? null,
       creatorCorrect,
       opponentCorrect,
+      creatorScore: state.creator.score,
+      opponentScore: state.opponent?.score ?? 0,
     };
 
     // Send result
@@ -503,18 +505,29 @@ export class DuelManager {
 
     // Build full results
     const results: QuestionResult[] = [];
+    let runningCreatorScore = 0;
+    let runningOpponentScore = 0;
+    
     for (let i = 0; i < state.questionsCount; i++) {
       const question = state.questions[i];
       const creatorAnswer = state.creator.answers.get(i);
       const opponentAnswer = state.opponent?.answers.get(i);
+      
+      const creatorCorrect = creatorAnswer?.answerIndex === question.correctIndex;
+      const opponentCorrect = opponentAnswer?.answerIndex === question.correctIndex;
+      
+      if (creatorCorrect) runningCreatorScore++;
+      if (opponentCorrect) runningOpponentScore++;
 
       results.push({
         questionIndex: i,
         correctIndex: question.correctIndex,
         creatorAnswer: creatorAnswer?.answerIndex ?? null,
         opponentAnswer: opponentAnswer?.answerIndex ?? null,
-        creatorCorrect: creatorAnswer?.answerIndex === question.correctIndex,
-        opponentCorrect: opponentAnswer?.answerIndex === question.correctIndex,
+        creatorCorrect,
+        opponentCorrect,
+        creatorScore: runningCreatorScore,
+        opponentScore: runningOpponentScore,
       });
     }
 
