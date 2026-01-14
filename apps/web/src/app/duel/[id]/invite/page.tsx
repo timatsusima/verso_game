@@ -6,7 +6,7 @@ import { useAuthStore } from '@/stores/auth-store';
 import { useTranslations } from '@/hooks/use-translations';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { generateTelegramShareLink } from '@/lib/utils';
+import { generateInviteLink, generateTelegramShareLink } from '@/lib/utils';
 
 interface DuelData {
   id: string;
@@ -27,8 +27,11 @@ export default function InvitePage() {
   const [duel, setDuel] = useState<DuelData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [showTip, setShowTip] = useState(false);
 
   const duelId = params.id as string;
+  const inviteLink = generateInviteLink(duelId);
   const telegramShareLink = duel ? generateTelegramShareLink(duelId, duel.topic) : '';
 
   useEffect(() => {
@@ -67,13 +70,27 @@ export default function InvitePage() {
     }
   }, [duelId, token, router]);
 
-  const handleTelegramShare = () => {
-    if (window.Telegram?.WebApp) {
-      // Use Telegram's share functionality
-      window.open(telegramShareLink, '_blank');
-    } else {
-      window.open(telegramShareLink, '_blank');
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(inviteLink);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Fallback
+      const textArea = document.createElement('textarea');
+      textArea.value = inviteLink;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
     }
+  };
+
+  const handleTelegramShare = () => {
+    setShowTip(true);
+    window.open(telegramShareLink, '_blank');
   };
 
   if (isLoading) {
@@ -126,16 +143,38 @@ export default function InvitePage() {
         </div>
       </Card>
 
-      {/* Share Button */}
-      <div className="animate-slide-up" style={{ animationDelay: '100ms' }}>
+      {/* Share Options */}
+      <div className="space-y-3 animate-slide-up" style={{ animationDelay: '100ms' }}>
+        {/* Copy Link - рекомендуемый способ */}
         <Button
           fullWidth
           size="lg"
+          onClick={handleCopyLink}
+        >
+          {copied ? '✅ ' + (language === 'ru' ? 'Скопировано!' : 'Copied!') : '📋 ' + (language === 'ru' ? 'Копировать ссылку' : 'Copy Link')}
+        </Button>
+
+        {/* Telegram Share */}
+        <Button
+          fullWidth
+          size="lg"
+          variant="secondary"
           onClick={handleTelegramShare}
         >
-          📤 {language === 'ru' ? 'Пригласить друга' : 'Invite Friend'}
+          📤 {language === 'ru' ? 'Отправить в Telegram' : 'Send via Telegram'}
         </Button>
       </div>
+
+      {/* Tip after sharing */}
+      {showTip && (
+        <Card variant="glass" className="mt-4 animate-slide-up">
+          <p className="text-sm text-center text-tg-text-secondary">
+            💡 {language === 'ru' 
+              ? 'После отправки вернитесь сюда через кнопку меню бота' 
+              : 'After sending, return here via bot menu button'}
+          </p>
+        </Card>
+      )}
 
       {/* Back Button */}
       <div className="mt-auto pt-6">

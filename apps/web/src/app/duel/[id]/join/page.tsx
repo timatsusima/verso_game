@@ -13,6 +13,7 @@ interface DuelData {
   questionsCount: number;
   language: string;
   status: string;
+  creatorId: string;
   creator: { firstName: string };
 }
 
@@ -38,7 +39,7 @@ function JoinPageContent() {
   const searchParams = useSearchParams();
   const devParam = searchParams.get('dev');
   const { t, language } = useTranslations();
-  const { token, isAuthenticated, setLanguage, setAuth } = useAuthStore();
+  const { token, isAuthenticated, setLanguage, setAuth, userId } = useAuthStore();
   
   const [duel, setDuel] = useState<DuelData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -116,7 +117,7 @@ function JoinPageContent() {
   // Fetch duel after authentication
   useEffect(() => {
     const fetchDuel = async () => {
-      if (!token) return;
+      if (!token || !userId) return;
       
       try {
         const response = await fetch(`/api/duel/${duelId}`, {
@@ -130,6 +131,14 @@ function JoinPageContent() {
         }
 
         const data = await response.json();
+        
+        // If current user is the creator, redirect to invite page
+        if (data.duel.creatorId === userId) {
+          console.log('[JoinPage] User is creator, redirecting to invite');
+          router.push(`/duel/${duelId}/invite`);
+          return;
+        }
+        
         setDuel(data.duel);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Error loading duel');
@@ -138,10 +147,10 @@ function JoinPageContent() {
       }
     };
 
-    if (token && !isAuthenticating) {
+    if (token && !isAuthenticating && userId) {
       fetchDuel();
     }
-  }, [duelId, token, isAuthenticating]);
+  }, [duelId, token, isAuthenticating, userId, router]);
 
   const handleJoin = async () => {
     setIsJoining(true);
