@@ -47,12 +47,17 @@ function HomePageContent() {
   const [isAuthenticating, setIsAuthenticating] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Handle Telegram start_param (deep link)
+  // Handle Telegram start_param (deep link) - only once per session
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const startParam = window.Telegram?.WebApp?.initDataUnsafe?.start_param;
+      const handledKey = `handled_start_param_${startParam}`;
       
-      if (startParam) {
+      // Check if this start_param was already handled
+      if (startParam && !sessionStorage.getItem(handledKey)) {
+        // Mark as handled
+        sessionStorage.setItem(handledKey, 'true');
+        
         // Handle join_DUEL_ID format
         if (startParam.startsWith('join_')) {
           const duelId = startParam.replace('join_', '');
