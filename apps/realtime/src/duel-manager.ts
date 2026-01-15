@@ -273,7 +273,13 @@ export class DuelManager {
    */
   private sendQuestion(state: DuelState) {
     const question = state.questions[state.currentQuestionIndex];
-    if (!question) return;
+    
+    // If no more questions (OpenAI returned fewer than requested), finish the duel
+    if (!question) {
+      console.log(`No question at index ${state.currentQuestionIndex}, finishing duel early`);
+      this.finishDuel(state);
+      return;
+    }
 
     // Reset question state
     state.isLocked = false;
@@ -432,6 +438,13 @@ export class DuelManager {
     }
 
     const question = state.questions[state.currentQuestionIndex];
+    
+    // Safety check: if no question exists, finish the duel
+    if (!question) {
+      console.log(`No question at index ${state.currentQuestionIndex} in endQuestion, finishing duel`);
+      this.finishDuel(state);
+      return;
+    }
     const correctIndex = question.correctIndex;
 
     // Get answers
@@ -518,14 +531,19 @@ export class DuelManager {
     // Send result
     this.io.to(this.getRoomName(state.duelId)).emit('duel:questionResult', result);
 
-    // Check if duel is finished
-    if (state.currentQuestionIndex >= state.questionsCount - 1) {
+    // Check if duel is finished (use actual questions count)
+    const actualQuestionsCount = Math.min(state.questionsCount, state.questions.length);
+    const isLastQuestion = state.currentQuestionIndex >= actualQuestionsCount - 1;
+    
+    if (isLastQuestion) {
+      console.log(`Last question (${state.currentQuestionIndex + 1}/${actualQuestionsCount}), finishing duel`);
       setTimeout(() => {
         this.finishDuel(state);
       }, QUESTION_RESULT_DISPLAY_TIME * 1000);
     } else {
       // Next question after delay
       state.currentQuestionIndex++;
+      console.log(`Moving to question ${state.currentQuestionIndex + 1}/${actualQuestionsCount}`);
       setTimeout(() => {
         this.sendQuestion(state);
       }, QUESTION_RESULT_DISPLAY_TIME * 1000);
@@ -557,13 +575,16 @@ export class DuelManager {
       },
     });
 
-    // Build full results
+    // Build full results (use actual questions count, not requested count)
     const results: QuestionResult[] = [];
     let runningCreatorScore = 0;
     let runningOpponentScore = 0;
+    const actualQuestionsCount = Math.min(state.questionsCount, state.questions.length);
     
-    for (let i = 0; i < state.questionsCount; i++) {
+    for (let i = 0; i < actualQuestionsCount; i++) {
       const question = state.questions[i];
+      if (!question) break;
+      
       const creatorAnswer = state.creator.answers.get(i);
       const opponentAnswer = state.opponent?.answers.get(i);
       
