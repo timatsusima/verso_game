@@ -10,6 +10,7 @@ interface QuestionCardProps {
   disabled?: boolean;
   onAnswer: (index: number) => void;
   showResult?: boolean;
+  isUrgencyMode?: boolean;
 }
 
 const optionLabels = ['A', 'B', 'C', 'D'];
@@ -21,6 +22,7 @@ export function QuestionCard({
   disabled,
   onAnswer,
   showResult = false,
+  isUrgencyMode = false,
 }: QuestionCardProps) {
   const getOptionState = (index: number) => {
     if (!showResult) {
@@ -54,7 +56,8 @@ export function QuestionCard({
               className={cn(
                 'w-full p-4 rounded-xl text-left transition-all duration-200',
                 'flex items-center gap-4 group',
-                state === 'default' && 'bg-tg-bg-secondary hover:bg-white/10 border border-white/5',
+                state === 'default' && !isUrgencyMode && 'bg-tg-bg-secondary hover:bg-white/10 border border-white/5',
+                state === 'default' && isUrgencyMode && 'bg-tg-bg-secondary hover:bg-white/10 border border-orange-500/40 animate-urgency-option-pulse',
                 state === 'selected' && 'bg-blue-500/20 border-2 border-blue-500',
                 state === 'correct' && 'bg-duel-correct/20 border-2 border-duel-correct animate-scale-in',
                 state === 'incorrect' && 'bg-duel-incorrect/20 border-2 border-duel-incorrect animate-shake',

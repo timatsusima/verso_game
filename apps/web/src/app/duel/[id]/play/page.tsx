@@ -8,13 +8,12 @@ import { useSocket } from '@/hooks/use-socket';
 import { useTranslations } from '@/hooks/use-translations';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Timer } from '@/components/ui/timer';
 import { QuestionCard } from '@/components/game/question-card';
 import { ScoreDisplay } from '@/components/game/score-display';
 import { ProgressBar } from '@/components/game/progress-bar';
 import { DuelHeader, type PlayerStatus } from '@/components/game/duel-header';
 import { DuelToasts, useDuelToasts } from '@/components/game/duel-toasts';
-import { SecondTimerOverlay } from '@/components/game/second-timer-overlay';
+import { UrgencyBanner, UrgencyVignette, UrgencyTimer } from '@/components/game/urgency-mode';
 import { DuelResultScreen, type DuelOutcome } from '@/components/game/duel-result-screen';
 import { cn } from '@/lib/utils';
 import type { PlayerAnswerInfo } from '@tg-duel/shared';
@@ -89,7 +88,7 @@ export default function PlayPage() {
   const [myStatus, setMyStatus] = useState<PlayerStatus>('thinking');
   const [rivalStatus, setRivalStatus] = useState<PlayerStatus>('thinking');
   const [isFirstAnswerer, setIsFirstAnswerer] = useState<string | null>(null);
-  const [showSecondTimer, setShowSecondTimer] = useState(false);
+  const [isUrgencyMode, setIsUrgencyMode] = useState(false);
   const [playerTimings, setPlayerTimings] = useState<PlayerTimingInfo[]>([]);
   const questionIndexRef = useRef(currentQuestionIndex);
   
@@ -107,7 +106,7 @@ export default function PlayPage() {
       setMyStatus('thinking');
       setRivalStatus('thinking');
       setIsFirstAnswerer(null);
-      setShowSecondTimer(false);
+      setIsUrgencyMode(false);
       setPlayerTimings([]);
       clearToasts(); // Clear all toasts on new question
     }
@@ -157,7 +156,7 @@ export default function PlayPage() {
       
       // Show overlay only for second player
       if (data.secondPlayerId === userId) {
-        setShowSecondTimer(true);
+        setIsUrgencyMode(true);
         addToast(t('hurryUpToast'), 'danger', 3000);
       }
     };
@@ -178,7 +177,7 @@ export default function PlayPage() {
       if (latest.questionIndex === currentQuestionIndex) {
         setLastResult(latest);
         setShowResult(true);
-        setShowSecondTimer(false);
+        setIsUrgencyMode(false);
         
         // Extract player timings if available
         const perPlayer = (latest as unknown as { perPlayer?: PlayerAnswerInfo[] }).perPlayer;
@@ -394,26 +393,19 @@ export default function PlayPage() {
     );
   }
 
-  // Determine urgency for timer
+  // Determine display time for timer
   const displayTime = isLocked && lockTimeRemaining !== null ? lockTimeRemaining : timeRemaining;
-  const isUrgent = isLocked || displayTime <= 10;
-  const isCritical = displayTime <= 3;
 
   // Game in progress
   return (
     <div className={cn(
-      'flex-1 flex flex-col p-4 transition-all duration-300',
-      showSecondTimer && 'border-2 border-orange-500 rounded-2xl animate-border-urgent'
+      'flex-1 flex flex-col p-4 transition-all duration-300'
     )}>
+      {/* Urgency mode effects */}
+      <UrgencyVignette isActive={isUrgencyMode && !hasAnswered} />
+      
       {/* Toasts */}
       <DuelToasts toasts={toasts} onRemove={removeToast} />
-      
-      {/* 10 Second Overlay */}
-      <SecondTimerOverlay 
-        isActive={showSecondTimer && !hasAnswered} 
-        timeRemaining={lockTimeRemaining ?? 10}
-        onClose={() => setShowSecondTimer(false)}
-      />
 
       {/* Duel Header with PvP indicators */}
       <DuelHeader
@@ -447,35 +439,19 @@ export default function PlayPage() {
 
       {/* Timer */}
       <div className="flex justify-center mb-4">
-        <div className={cn(
-          'transition-all duration-300',
-          isUrgent && 'scale-110',
-          isCritical && 'animate-timer-urgent'
-        )}>
-          <Timer
-            seconds={displayTime}
-            maxSeconds={isLocked ? 10 : 60}
-            size="md"
-            variant={isCritical ? 'danger' : isLocked ? 'warning' : 'default'}
-          />
-        </div>
+        <UrgencyTimer
+          seconds={displayTime}
+          isUrgencyMode={isUrgencyMode && !hasAnswered}
+        />
       </div>
 
-      {/* Lock indicator with enhanced urgency */}
-      {isLocked && !hasAnswered && (
-        <div className={cn(
-          'text-center mb-4 py-2 px-4 rounded-full mx-auto',
-          'bg-gradient-to-r from-orange-500/20 to-red-500/20',
-          'border border-orange-500/50',
-          'animate-pulse'
-        )}>
-          <p className={cn(
-            'font-bold',
-            isCritical ? 'text-red-400' : 'text-orange-400'
-          )}>
-            ⚡ {t('hurryUp')} — {displayTime} {t('seconds')}!
-          </p>
-        </div>
+      {/* Urgency banner - non-blocking indicator */}
+      {isUrgencyMode && !hasAnswered && (
+        <UrgencyBanner
+          isActive={isUrgencyMode && !hasAnswered}
+          timeRemaining={displayTime}
+          language={language}
+        />
       )}
 
       {/* Question */}
@@ -487,6 +463,7 @@ export default function PlayPage() {
           disabled={hasAnswered}
           onAnswer={handleAnswer}
           showResult={showResult}
+          isUrgencyMode={isUrgencyMode && !hasAnswered}
         />
       )}
 
