@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken, extractToken } from '@/lib/auth';
-import { generateQuestions } from '@/lib/openai';
+import { getOrGenerateQuestions } from '@/lib/question-bank';
 import { generateInviteLink } from '@/lib/utils';
 import { CreateDuelSchema } from '@tg-duel/shared';
 
@@ -45,12 +45,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate questions using OpenAI
+    // Get questions from bank or generate new ones
     let pack;
     try {
-      pack = await generateQuestions(topic, questionsCount, language, difficulty);
+      pack = await getOrGenerateQuestions(topic, questionsCount, language, difficulty);
+      console.log(`[Duel Create] Questions: ${pack.stats.fromCache} cached, ${pack.stats.newlyGenerated} new`);
     } catch (error) {
-      console.error('OpenAI error:', error);
+      console.error('Question generation error:', error);
       return NextResponse.json(
         { error: 'Failed to generate questions. Please try a different topic.' },
         { status: 500 }

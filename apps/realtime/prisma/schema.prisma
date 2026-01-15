@@ -92,3 +92,41 @@ model DuelAnswer {
   @@index([duelId])
   @@index([playerId])
 }
+
+// ============ Question Bank (Caching & Deduplication) ============
+
+model QuestionBank {
+  id             String    @id @default(cuid())
+  
+  // Normalized topic for matching (lowercase, trimmed)
+  topicNorm      String
+  subtopic       String?
+  
+  language       String    // "ru" | "en"
+  difficulty     String    // "easy" | "medium" | "hard"
+  
+  // Question content
+  questionText   String    @db.Text
+  options        String    // JSON array of 4 options
+  correctIndex   Int       // 0-3
+  
+  // Deduplication fingerprint (sha256 of normalized question + sorted options)
+  fingerprint    String    @unique
+  
+  // Usage tracking
+  timesServed    Int       @default(0)
+  lastServedAt   DateTime?
+  
+  // Quality control (for future use)
+  qualityScore   Float?
+  isReported     Boolean   @default(false)
+  isActive       Boolean   @default(true)
+  
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([topicNorm, language, difficulty])
+  @@index([fingerprint])
+  @@index([lastServedAt])
+  @@index([timesServed])
+}
