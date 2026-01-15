@@ -318,7 +318,9 @@ export default function PlayPage() {
         if (!perPlayer || perPlayer.length < 2) return false;
         const myTiming = perPlayer.find(p => p.playerId === userId);
         const opponentTiming = perPlayer.find(p => p.playerId !== userId);
-        return myTiming?.timeMs !== null && opponentTiming?.timeMs !== null && myTiming.timeMs < opponentTiming.timeMs;
+        const myTime = myTiming?.timeMs;
+        const opponentTime = opponentTiming?.timeMs;
+        return myTime != null && opponentTime != null && myTime < opponentTime;
       }).length,
       bestStreak: calculateBestStreak(questionResults, userId || '', isCreator),
     };
