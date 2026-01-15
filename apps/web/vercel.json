@@ -1,5 +1,5 @@
 {
   "installCommand": "cd ../.. && pnpm install",
-  "buildCommand": "cd ../../packages/shared && pnpm build && cd ../../apps/web && pnpm db:generate && pnpm build",
+  "buildCommand": "cd ../../packages/shared && pnpm build && cd ../../apps/web && pnpm db:push --accept-data-loss && pnpm db:generate && pnpm build",
   "framework": "nextjs"
 }

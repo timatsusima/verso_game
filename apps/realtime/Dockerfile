@@ -29,4 +29,5 @@ WORKDIR /app/apps/realtime
 
 EXPOSE 3001
 
-CMD ["node", "dist/index.js"]
+# Apply database migrations on startup
+CMD ["sh", "-c", "npx prisma db push --accept-data-loss && node dist/index.js"]

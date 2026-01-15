@@ -277,8 +277,8 @@ ${existingBlock}
 4. Ищи менее очевидные факты
 5. Все вопросы должны быть фактически корректными
 
-Верни JSON массив:
-[{"text": "Вопрос?", "options": ["A", "B", "C", "D"], "correctIndex": 0}]`
+Верни JSON объект с полем "questions":
+{"questions": [{"text": "Вопрос?", "options": ["A", "B", "C", "D"], "correctIndex": 0}]}`
     : `You are a quiz generator. Create UNIQUE questions that do NOT repeat existing ones.
 Difficulty: ${difficultyDescriptions.en[difficulty]}
 ${existingBlock}
@@ -289,8 +289,8 @@ RULES:
 4. Focus on less obvious facts
 5. All questions must be factually correct
 
-Return JSON array:
-[{"text": "Question?", "options": ["A", "B", "C", "D"], "correctIndex": 0}]`;
+Return JSON object with "questions" field:
+{"questions": [{"text": "Question?", "options": ["A", "B", "C", "D"], "correctIndex": 0}]}`;
 
   const userPrompt = language === 'ru'
     ? `Создай ровно ${count} уникальных вопросов на тему: "${topic}"`
@@ -314,20 +314,46 @@ Return JSON array:
     throw new Error('Empty response from OpenAI');
   }
 
-  const parsed = JSON.parse(content);
+  let parsed;
+  try {
+    parsed = JSON.parse(content);
+  } catch (error) {
+    console.error('[QuestionBank] Failed to parse OpenAI response:', content);
+    throw new Error('Invalid JSON response from OpenAI');
+  }
   
-  // Handle both {questions: [...]} and direct array formats
-  const questionsArray = parsed.questions || parsed;
+  // Handle {questions: [...]} format
+  const questionsArray = parsed.questions;
   
   if (!Array.isArray(questionsArray)) {
-    throw new Error('Invalid response format from OpenAI');
+    console.error('[QuestionBank] Invalid response format:', parsed);
+    throw new Error('OpenAI response must contain "questions" array');
   }
 
-  return questionsArray.map((q: { text: string; options: string[]; correctIndex: number }) => ({
-    questionText: q.text,
-    options: q.options as [string, string, string, string],
-    correctIndex: q.correctIndex as 0 | 1 | 2 | 3,
-  }));
+  if (questionsArray.length === 0) {
+    throw new Error('OpenAI returned empty questions array');
+  }
+
+  // Validate and map questions
+  return questionsArray.map((q: any, index: number) => {
+    if (!q.text || !q.options || typeof q.correctIndex !== 'number') {
+      throw new Error(`Invalid question format at index ${index}: ${JSON.stringify(q)}`);
+    }
+    
+    if (!Array.isArray(q.options) || q.options.length !== 4) {
+      throw new Error(`Question at index ${index} must have exactly 4 options`);
+    }
+    
+    if (q.correctIndex < 0 || q.correctIndex > 3) {
+      throw new Error(`Question at index ${index} has invalid correctIndex: ${q.correctIndex}`);
+    }
+
+    return {
+      questionText: q.text,
+      options: q.options as [string, string, string, string],
+      correctIndex: q.correctIndex as 0 | 1 | 2 | 3,
+    };
+  });
 }
 
 // ============ Main API ============
