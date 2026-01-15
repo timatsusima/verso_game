@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Card } from '@/components/ui/card';
+import { DuelLoadingOverlay } from '@/components/game/duel-loading-overlay';
 import { useTranslations } from '@/hooks/use-translations';
 import type { Language, DifficultyLevel } from '@tg-duel/shared';
 
@@ -45,6 +46,7 @@ function HomePageContent() {
   const [questionsCount, setQuestionsCount] = useState<10 | 20 | 30>(10);
   const [difficulty, setDifficulty] = useState<DifficultyLevel>('medium');
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingComplete, setIsLoadingComplete] = useState(false);
   const [isAuthenticating, setIsAuthenticating] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -198,6 +200,7 @@ function HomePageContent() {
     }
 
     setIsLoading(true);
+    setIsLoadingComplete(false);
     setError(null);
 
     try {
@@ -251,11 +254,18 @@ function HomePageContent() {
       }
 
       const data = await response.json();
-      router.push(`/duel/${data.duelId}/invite`);
+      
+      // Mark loading as complete to animate progress to 100%
+      setIsLoadingComplete(true);
+      
+      // Wait for animation to finish, then redirect
+      setTimeout(() => {
+        router.push(`/duel/${data.duelId}/invite`);
+      }, 500);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create duel');
-    } finally {
       setIsLoading(false);
+      setIsLoadingComplete(false);
     }
   };
 
@@ -312,6 +322,14 @@ function HomePageContent() {
 
   return (
     <div className="flex-1 flex flex-col p-6">
+      {/* Loading Overlay */}
+      <DuelLoadingOverlay
+        isLoading={isLoading}
+        isComplete={isLoadingComplete}
+        language={language}
+        topic={topic.trim()}
+      />
+
       {/* Header */}
       <div className="text-center mb-8">
         <h1 className="text-3xl font-bold mb-2">🎯 Duel Quiz</h1>
