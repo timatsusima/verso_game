@@ -15,6 +15,7 @@ import { ProgressBar } from '@/components/game/progress-bar';
 import { DuelHeader, type PlayerStatus } from '@/components/game/duel-header';
 import { DuelToasts, useDuelToasts } from '@/components/game/duel-toasts';
 import { SecondTimerOverlay } from '@/components/game/second-timer-overlay';
+import { DuelResultScreen, type DuelOutcome } from '@/components/game/duel-result-screen';
 import { cn } from '@/lib/utils';
 import type { PlayerAnswerInfo } from '@tg-duel/shared';
 
@@ -22,6 +23,28 @@ interface PlayerTimingInfo {
   playerId: string;
   timeMs: number | null;
   isFirst: boolean;
+}
+
+// Calculate best streak of correct answers
+function calculateBestStreak(
+  results: Array<{ creatorCorrect: boolean; opponentCorrect: boolean }>,
+  myUserId: string,
+  amICreator: boolean
+): number {
+  let bestStreak = 0;
+  let currentStreak = 0;
+
+  for (const result of results) {
+    const wasCorrect = amICreator ? result.creatorCorrect : result.opponentCorrect;
+    if (wasCorrect) {
+      currentStreak++;
+      bestStreak = Math.max(bestStreak, currentStreak);
+    } else {
+      currentStreak = 0;
+    }
+  }
+
+  return bestStreak;
 }
 
 export default function PlayPage() {
@@ -283,100 +306,40 @@ export default function PlayPage() {
     const isWinner = finalResult.winnerId === userId;
     const isDraw = !finalResult.winnerId;
 
+    // Determine outcome
+    const outcome: DuelOutcome = isDraw ? 'draw' : isWinner ? 'win' : 'lose';
+
+    // Calculate stats from question results
+    const stats = {
+      correctAnswers: myScore,
+      totalQuestions: totalQuestions || 10,
+      fasterInQuestions: questionResults.filter(qr => {
+        const perPlayer = (qr as unknown as { perPlayer?: PlayerAnswerInfo[] }).perPlayer;
+        if (!perPlayer || perPlayer.length < 2) return false;
+        const myTiming = perPlayer.find(p => p.playerId === userId);
+        const opponentTiming = perPlayer.find(p => p.playerId !== userId);
+        return myTiming?.timeMs !== null && opponentTiming?.timeMs !== null && myTiming.timeMs < opponentTiming.timeMs;
+      }).length,
+      bestStreak: calculateBestStreak(questionResults, userId || '', isCreator),
+    };
+
+    const opponentName = isCreator 
+      ? (opponent?.name || 'Opponent') 
+      : (creator?.name || 'Opponent');
+
     return (
-      <div className="flex-1 flex flex-col p-6">
-        <div className="text-center mb-8 animate-bounce-in">
-          <div className="text-7xl mb-4">
-            {isDraw ? '🤝' : isWinner ? '🏆' : '😔'}
-          </div>
-          <h1 className="text-3xl font-bold mb-2">
-            {isDraw ? t('draw') : isWinner ? t('victory') : t('defeat')}
-          </h1>
-        </div>
-
-        <Card variant="bordered" className="mb-6 animate-slide-up">
-          <div className="text-center py-6">
-            <div className="flex items-center justify-center gap-8">
-              <div>
-                <p className="text-tg-text-secondary mb-1">{t('you')}</p>
-                <p className={cn(
-                  'text-5xl font-bold',
-                  isWinner && 'text-duel-gold',
-                  !isWinner && !isDraw && 'text-tg-text-secondary'
-                )}>
-                  {myScore}
-                </p>
-              </div>
-              <div className="text-2xl text-tg-hint">:</div>
-              <div>
-                <p className="text-tg-text-secondary mb-1">{t('opponent')}</p>
-                <p className={cn(
-                  'text-5xl font-bold',
-                  !isWinner && !isDraw && 'text-duel-gold',
-                  isWinner && 'text-tg-text-secondary'
-                )}>
-                  {theirScore}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="border-t border-white/10 pt-4">
-            <p className="text-center text-sm text-tg-text-secondary">
-              {topic}
-            </p>
-          </div>
-        </Card>
-
-        <div className="space-y-3 mt-auto">
-          {!showRematchOptions ? (
-            <>
-              <Button 
-                fullWidth 
-                size="lg" 
-                onClick={() => setShowRematchOptions(true)}
-              >
-                🔄 {language === 'ru' ? 'Повторить' : 'Play Again'}
-              </Button>
-              <Button 
-                fullWidth 
-                variant="secondary"
-                onClick={() => router.push('/')}
-              >
-                {t('backToMenu')}
-              </Button>
-            </>
-          ) : (
-            <>
-              <p className="text-center text-tg-text-secondary mb-2">
-                {language === 'ru' ? 'Выберите вариант:' : 'Choose option:'}
-              </p>
-              <Button 
-                fullWidth 
-                size="lg"
-                onClick={() => handleRematch(true)}
-                isLoading={isCreatingRematch}
-              >
-                🎯 {language === 'ru' ? `Та же тема: ${topic}` : `Same topic: ${topic}`}
-              </Button>
-              <Button 
-                fullWidth 
-                variant="secondary"
-                onClick={() => router.push('/')}
-              >
-                ✏️ {language === 'ru' ? 'Выбрать новую тему' : 'Choose new topic'}
-              </Button>
-              <Button 
-                fullWidth 
-                variant="ghost"
-                onClick={() => setShowRematchOptions(false)}
-              >
-                {language === 'ru' ? 'Назад' : 'Back'}
-              </Button>
-            </>
-          )}
-        </div>
-      </div>
+      <DuelResultScreen
+        outcome={outcome}
+        myScore={myScore}
+        opponentScore={theirScore}
+        opponentName={opponentName}
+        topic={topic || ''}
+        stats={stats}
+        language={language}
+        onRematch={() => handleRematch(true)}
+        onNewTopic={() => router.push('/')}
+        isLoadingRematch={isCreatingRematch}
+      />
     );
   }
 
