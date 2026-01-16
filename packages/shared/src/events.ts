@@ -32,6 +32,12 @@ export interface ClientToServerEvents {
   
   // Player requests current state (reconnection)
   'duel:sync': (data: { duelId: string }) => void;
+  
+  // Matchmaking: join queue
+  'mm:join': (data: { language: Language }) => void;
+  
+  // Matchmaking: cancel search
+  'mm:cancel': () => void;
 }
 
 // ============ Server -> Client Events ============
@@ -139,6 +145,24 @@ export interface ServerToClientEvents {
       delta: number;
       leagueName: string;
     } | null;
+  }) => void;
+  
+  // Matchmaking: status update
+  'mm:status': (data: {
+    state: 'searching' | 'error';
+    range?: { min: number; max: number };
+    message?: string;
+  }) => void;
+  
+  // Matchmaking: opponent found
+  'mm:found': (data: {
+    duelId: string;
+    opponent: {
+      id: string;
+      name: string;
+      sr: number;
+    };
+    isRanked: true;
   }) => void;
 }
 

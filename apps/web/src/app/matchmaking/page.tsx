@@ -1,12 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/auth-store';
 import { useTranslations } from '@/hooks/use-translations';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { RatingDisplay } from '@/components/game/rating-display';
+import { connectSocket, disconnectSocket, getSocket } from '@/lib/socket';
+import type { ServerToClientEvents } from '@tg-duel/shared';
 
 const TRANSLATIONS = {
   ru: {
@@ -33,18 +35,66 @@ export default function MatchmakingPage() {
   const { token, userId } = useAuthStore();
   const [isSearching, setIsSearching] = useState(false);
   const [srRange, setSrRange] = useState<{ min: number; max: number } | null>(null);
+  const socketRef = useRef<ReturnType<typeof getSocket> | null>(null);
 
   const t_mm = TRANSLATIONS[language];
 
-  // TODO: Connect to Socket.IO matchmaking in Phase 3
+  // Connect to socket on mount
+  useEffect(() => {
+    if (!token || !userId) return;
+
+    const socket = connectSocket();
+    socketRef.current = socket;
+
+    // Handle matchmaking status updates
+    const handleStatus: ServerToClientEvents['mm:status'] = (data) => {
+      if (data.state === 'searching' && data.range) {
+        setSrRange(data.range);
+        setIsSearching(true);
+      } else if (data.state === 'error') {
+        setIsSearching(false);
+        console.error('Matchmaking error:', data.message);
+      }
+    };
+
+    // Handle match found
+    const handleFound: ServerToClientEvents['mm:found'] = (data) => {
+      console.log('Match found!', data);
+      // Navigate to duel play page
+      router.push(`/duel/${data.duelId}/play`);
+    };
+
+    socket.on('mm:status', handleStatus);
+    socket.on('mm:found', handleFound);
+
+    return () => {
+      socket.off('mm:status', handleStatus);
+      socket.off('mm:found', handleFound);
+    };
+  }, [token, userId, router]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (socketRef.current && isSearching) {
+        socketRef.current.emit('mm:cancel');
+      }
+    };
+  }, [isSearching]);
+
   const handleStartSearch = () => {
+    if (!socketRef.current || !token) return;
+
     setIsSearching(true);
-    // Will be implemented in Phase 3
+    socketRef.current.emit('mm:join', { language });
   };
 
   const handleCancel = () => {
+    if (socketRef.current) {
+      socketRef.current.emit('mm:cancel');
+    }
     setIsSearching(false);
-    // TODO: Cancel matchmaking in Phase 3
+    setSrRange(null);
   };
 
   if (!token || !userId) {

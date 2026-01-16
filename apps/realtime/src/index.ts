@@ -9,6 +9,7 @@ import type {
   SocketData 
 } from '@tg-duel/shared';
 import { DuelManager } from './duel-manager.js';
+import { MatchmakingManager } from './matchmaking-manager.js';
 import { verifyToken } from './auth.js';
 
 const PORT = process.env.PORT || 3001;
@@ -42,8 +43,10 @@ const io = new Server<
   transports: ['websocket', 'polling'],
 });
 
-// Initialize duel manager
+// Initialize managers
 const duelManager = new DuelManager(io);
+const matchmakingManager = new MatchmakingManager(io);
+matchmakingManager.setDuelManager(duelManager);
 
 // Socket.IO connection handler
 io.on('connection', async (socket) => {
@@ -130,12 +133,43 @@ io.on('connection', async (socket) => {
     }
   });
 
+  // Handle matchmaking join
+  socket.on('mm:join', async ({ language }) => {
+    try {
+      if (!socket.data.userId || !socket.data.username) {
+        socket.emit('error', { code: 'UNAUTHORIZED', message: 'Not authenticated' });
+        return;
+      }
+
+      await matchmakingManager.joinQueue(
+        socket,
+        socket.data.userId,
+        socket.data.username,
+        language
+      );
+    } catch (error) {
+      console.error('Matchmaking join error:', error);
+      socket.emit('mm:status', {
+        state: 'error',
+        message: 'Failed to join matchmaking',
+      });
+    }
+  });
+
+  // Handle matchmaking cancel
+  socket.on('mm:cancel', () => {
+    if (socket.data.userId) {
+      matchmakingManager.removeFromQueue(socket.data.userId, undefined, 'cancelled');
+    }
+  });
+
   // Handle disconnect
   socket.on('disconnect', () => {
     console.log(`Client disconnected: ${socket.id}`);
     
     if (socket.data.userId) {
       duelManager.handleDisconnect(socket.data.userId);
+      matchmakingManager.handleDisconnect(socket.id);
     }
   });
 });
