@@ -18,6 +18,8 @@ const TRANSLATIONS = {
     srRange: 'Диапазон SR',
     cancel: 'Отмена',
     backToMenu: 'В меню',
+    opponentFound: 'Соперник найден!',
+    startingDuel: 'Начинаем дуэль…',
   },
   en: {
     title: 'Finding Opponent',
@@ -26,6 +28,8 @@ const TRANSLATIONS = {
     srRange: 'SR Range',
     cancel: 'Cancel',
     backToMenu: 'Back to Menu',
+    opponentFound: 'Opponent Found!',
+    startingDuel: 'Starting duel…',
   },
 };
 
@@ -35,6 +39,10 @@ export default function MatchmakingPage() {
   const { token, userId } = useAuthStore();
   const [isSearching, setIsSearching] = useState(false);
   const [srRange, setSrRange] = useState<{ min: number; max: number } | null>(null);
+  const [matchFound, setMatchFound] = useState<{
+    duelId: string;
+    opponent: { id: string; name: string; sr: number };
+  } | null>(null);
   const socketRef = useRef<ReturnType<typeof getSocket> | null>(null);
 
   const t_mm = TRANSLATIONS[language];
@@ -60,8 +68,16 @@ export default function MatchmakingPage() {
     // Handle match found
     const handleFound: ServerToClientEvents['mm:found'] = (data) => {
       console.log('Match found!', data);
-      // Navigate to duel play page
-      router.push(`/duel/${data.duelId}/play`);
+      setIsSearching(false);
+      setMatchFound({
+        duelId: data.duelId,
+        opponent: data.opponent,
+      });
+      
+      // Navigate to duel after short delay
+      setTimeout(() => {
+        router.push(`/duel/${data.duelId}/play`);
+      }, 2000);
     };
 
     socket.on('mm:status', handleStatus);
@@ -126,7 +142,20 @@ export default function MatchmakingPage() {
 
       {/* Matchmaking Status */}
       <Card variant="bordered" className="flex-1 flex flex-col items-center justify-center p-8">
-        {!isSearching ? (
+        {matchFound ? (
+          <>
+            <div className="text-6xl mb-6 animate-bounce">🎯</div>
+            <p className="text-2xl font-bold mb-2 text-green-400">{t_mm.opponentFound}</p>
+            <p className="text-lg text-tg-text-secondary mb-2">
+              {matchFound.opponent.name}
+            </p>
+            <p className="text-sm text-tg-hint mb-6">
+              SR: {matchFound.opponent.sr}
+            </p>
+            <div className="w-12 h-12 border-4 border-green-500 border-t-transparent rounded-full animate-spin" />
+            <p className="text-sm text-tg-text-secondary mt-4">{t_mm.startingDuel}</p>
+          </>
+        ) : !isSearching ? (
           <>
             <div className="text-6xl mb-6">🎯</div>
             <p className="text-lg text-tg-text-secondary mb-8 text-center">
