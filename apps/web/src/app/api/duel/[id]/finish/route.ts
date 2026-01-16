@@ -27,6 +27,45 @@ export async function POST(
       );
     }
 
+    // Check if rating was already processed (idempotency)
+    if (duel.isRanked) {
+      const existingMatch = await prisma.matchResult.findUnique({
+        where: { duelId },
+      });
+
+      if (existingMatch) {
+        // Rating already processed, return existing data
+        const creatorRating = await prisma.userRating.findUnique({
+          where: { userId: duel.creatorId },
+        });
+        const opponentRating = duel.opponentId
+          ? await prisma.userRating.findUnique({
+              where: { userId: duel.opponentId },
+            })
+          : null;
+
+        return NextResponse.json({
+          success: true,
+          rating: {
+            creator: {
+              srBefore: creatorRating ? creatorRating.sr - (existingMatch.creatorDelta ?? 0) : 1000,
+              srAfter: creatorRating?.sr ?? 1000,
+              delta: existingMatch.creatorDelta ?? 0,
+              leagueName: getLeagueName(creatorRating?.sr ?? 1000),
+            },
+            opponent: duel.opponentId && opponentRating
+              ? {
+                  srBefore: opponentRating.sr - (existingMatch.opponentDelta ?? 0),
+                  srAfter: opponentRating.sr,
+                  delta: existingMatch.opponentDelta ?? 0,
+                  leagueName: getLeagueName(opponentRating.sr),
+                }
+              : null,
+          },
+        });
+      }
+    }
+
     // Calculate scores and build question results with timing
     const creatorScore = duel.answers
       .filter(a => a.playerId === duel.creatorId && a.isCorrect)
@@ -79,18 +118,21 @@ export async function POST(
       });
     }
 
-    // Process rating
-    const ratingData = await processMatchRating(
-      duelId,
-      duel.creatorId,
-      duel.opponentId,
-      creatorScore,
-      opponentScore,
-      duel.questionsCount,
-      duel.topic,
-      duel.isRanked,
-      questionResults
-    );
+    // Process rating only if ranked
+    let ratingData = null;
+    if (duel.isRanked) {
+      ratingData = await processMatchRating(
+        duelId,
+        duel.creatorId,
+        duel.opponentId,
+        creatorScore,
+        opponentScore,
+        duel.questionsCount,
+        duel.topic,
+        duel.isRanked,
+        questionResults
+      );
+    }
 
     // Get league names
     const creatorLeague = ratingData
