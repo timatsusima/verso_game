@@ -134,12 +134,28 @@ io.on('connection', async (socket) => {
   });
 
   // Handle matchmaking join
-  socket.on('mm:join', async ({ language }) => {
+  socket.on('mm:join', async ({ language, token }) => {
     try {
+      // Verify token if provided
+      if (token) {
+        const payload = await verifyToken(token);
+        if (!payload) {
+          socket.emit('error', { code: 'UNAUTHORIZED', message: 'Invalid token' });
+          return;
+        }
+
+        // Store user data in socket
+        socket.data.userId = payload.userId;
+        socket.data.username = payload.firstName;
+        socket.data.language = payload.language;
+      }
+
       if (!socket.data.userId || !socket.data.username) {
         socket.emit('error', { code: 'UNAUTHORIZED', message: 'Not authenticated' });
         return;
       }
+
+      console.log(`[Matchmaking] User ${socket.data.username} (${socket.data.userId}) joining ${language} queue`);
 
       await matchmakingManager.joinQueue(
         socket,

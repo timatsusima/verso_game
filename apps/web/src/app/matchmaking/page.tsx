@@ -54,8 +54,16 @@ export default function MatchmakingPage() {
     const socket = connectSocket();
     socketRef.current = socket;
 
+    // Authenticate socket on connection
+    const handleConnect = () => {
+      console.log('[Matchmaking] Socket connected, authenticating...');
+      // Store token in socket auth for authentication middleware
+      // Note: Socket.IO doesn't have built-in auth, so we'll send it with mm:join
+    };
+
     // Handle matchmaking status updates
     const handleStatus: ServerToClientEvents['mm:status'] = (data) => {
+      console.log('[Matchmaking] Status update:', data);
       if (data.state === 'searching' && data.range) {
         setSrRange(data.range);
         setIsSearching(true);
@@ -67,7 +75,7 @@ export default function MatchmakingPage() {
 
     // Handle match found
     const handleFound: ServerToClientEvents['mm:found'] = (data) => {
-      console.log('Match found!', data);
+      console.log('[Matchmaking] Match found!', data);
       setIsSearching(false);
       setMatchFound({
         duelId: data.duelId,
@@ -80,12 +88,18 @@ export default function MatchmakingPage() {
       }, 2000);
     };
 
+    socket.on('connect', handleConnect);
     socket.on('mm:status', handleStatus);
     socket.on('mm:found', handleFound);
+    socket.on('error', (data) => {
+      console.error('[Matchmaking] Socket error:', data);
+    });
 
     return () => {
+      socket.off('connect', handleConnect);
       socket.off('mm:status', handleStatus);
       socket.off('mm:found', handleFound);
+      socket.off('error');
     };
   }, [token, userId, router]);
 
@@ -99,10 +113,16 @@ export default function MatchmakingPage() {
   }, [isSearching]);
 
   const handleStartSearch = () => {
-    if (!socketRef.current || !token) return;
+    if (!socketRef.current || !token) {
+      console.error('[Matchmaking] Cannot start search: socket or token missing');
+      return;
+    }
 
+    console.log('[Matchmaking] Starting search, language:', language);
     setIsSearching(true);
-    socketRef.current.emit('mm:join', { language });
+    
+    // Send token with mm:join for authentication
+    socketRef.current.emit('mm:join', { language, token });
   };
 
   const handleCancel = () => {

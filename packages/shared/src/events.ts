@@ -34,7 +34,7 @@ export interface ClientToServerEvents {
   'duel:sync': (data: { duelId: string }) => void;
   
   // Matchmaking: join queue
-  'mm:join': (data: { language: Language }) => void;
+  'mm:join': (data: { language: Language; token?: string }) => void;
   
   // Matchmaking: cancel search
   'mm:cancel': () => void;
