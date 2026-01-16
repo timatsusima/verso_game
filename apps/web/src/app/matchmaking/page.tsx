@@ -13,6 +13,7 @@ import type { ServerToClientEvents } from '@tg-duel/shared';
 const TRANSLATIONS = {
   ru: {
     title: 'Поиск соперника',
+    startSearch: 'Найти соперника',
     searching: 'Ищем соперника…',
     searchingNote: 'Ищем игрока с похожим рейтингом',
     srRange: 'Диапазон SR',
@@ -23,6 +24,7 @@ const TRANSLATIONS = {
   },
   en: {
     title: 'Finding Opponent',
+    startSearch: 'Find Opponent',
     searching: 'Searching for opponent…',
     searchingNote: 'Looking for player with similar rating',
     srRange: 'SR Range',
@@ -187,7 +189,7 @@ export default function MatchmakingPage() {
               onClick={handleStartSearch}
               className="h-14 text-lg font-bold bg-gradient-to-r from-blue-500 to-purple-600"
             >
-              {t_mm.searching}
+              {t_mm.startSearch}
             </Button>
             <Button
               fullWidth

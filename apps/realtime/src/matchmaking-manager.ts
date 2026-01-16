@@ -267,9 +267,27 @@ export class MatchmakingManager {
         },
       });
 
-      // Generate questions (will be done via API call or directly)
-      // For now, we'll let the frontend handle question generation
-      // when duel starts
+      // Generate questions via API call
+      const apiUrl = process.env.RATING_API_URL || process.env.CORS_ORIGIN || 'http://localhost:3000';
+      try {
+        console.log(`[Matchmaking] Generating questions for duel ${duel.id}...`);
+        const response = await fetch(`${apiUrl}/api/duel/${duel.id}/generate-questions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Failed to generate questions: ${response.status} ${errorText}`);
+        }
+
+        console.log(`[Matchmaking] Questions generated for duel ${duel.id}`);
+      } catch (error) {
+        console.error('[Matchmaking] Failed to generate questions:', error);
+        // Don't fail the match - questions can be generated later when duel starts
+      }
 
       // Notify both players
       const socket1 = this.io.sockets.sockets.get(player1.socketId);
