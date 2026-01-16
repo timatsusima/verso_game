@@ -71,6 +71,8 @@ const TRANSLATIONS = {
     drawChallenge: 'Решит реванш?',
     skillRating: 'SR',
     ratingChange: 'Рейтинг',
+    unranked: 'Unranked',
+    unrankedNote: 'не влияет на рейтинг',
   },
   en: {
     win: {
