@@ -8,9 +8,16 @@ interface DuelLoadingOverlayProps {
   isComplete: boolean;
   language: 'ru' | 'en';
   topic?: string;
+  mode?: 'start' | 'rematch';
+  playerNames?: {
+    you: string;
+    opponent: string;
+  };
+  difficulty?: string;
+  questionsCount?: number;
 }
 
-const PHASES = {
+const PHASES_START = {
   ru: [
     'Подбираем вопросы по теме',
     'Настраиваем сложность',
@@ -25,16 +32,41 @@ const PHASES = {
   ],
 };
 
+const PHASES_REMATCH = {
+  ru: [
+    'Собираем вопросы',
+    'Балансируем сложность',
+    'Проверяем уникальность',
+    'Почти готово ⚔️',
+  ],
+  en: [
+    'Collecting questions',
+    'Balancing difficulty',
+    'Checking uniqueness',
+    'Almost ready ⚔️',
+  ],
+};
+
 const TITLES = {
-  ru: 'Подготовка дуэли…',
-  en: 'Preparing the duel…',
+  start: {
+    ru: 'Подготовка дуэли…',
+    en: 'Preparing the duel…',
+  },
+  rematch: {
+    ru: 'Реванш начинается…',
+    en: 'Rematch incoming…',
+  },
 };
 
 export function DuelLoadingOverlay({ 
   isLoading, 
   isComplete, 
   language, 
-  topic 
+  topic,
+  mode = 'start',
+  playerNames,
+  difficulty,
+  questionsCount,
 }: DuelLoadingOverlayProps) {
   const [progress, setProgress] = useState(0);
   const [phaseIndex, setPhaseIndex] = useState(0);
@@ -42,8 +74,11 @@ export function DuelLoadingOverlay({
   const animationRef = useRef<number | null>(null);
   const startTimeRef = useRef<number>(0);
 
-  const phases = PHASES[language];
-  const title = TITLES[language];
+  const phases = mode === 'rematch' ? PHASES_REMATCH[language] : PHASES_START[language];
+  const title = TITLES[mode][language];
+  
+  // Faster progress for rematch (2.5-4s to 90%)
+  const progressDuration = mode === 'rematch' ? 3000 : 8000;
 
   // Handle visibility
   useEffect(() => {
@@ -65,10 +100,8 @@ export function DuelLoadingOverlay({
 
     const animate = () => {
       const elapsed = Date.now() - startTimeRef.current;
-      // Takes ~8 seconds to reach 90%
       // Using easeOutQuad for natural slow-down
-      const duration = 8000;
-      const t = Math.min(elapsed / duration, 1);
+      const t = Math.min(elapsed / progressDuration, 1);
       const eased = t * (2 - t); // easeOutQuad
       const targetProgress = eased * 90;
       
@@ -86,7 +119,7 @@ export function DuelLoadingOverlay({
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [isLoading, isComplete]);
+  }, [isLoading, isComplete, progressDuration]);
 
   // Complete to 100% when server responds
   useEffect(() => {
@@ -149,11 +182,33 @@ export function DuelLoadingOverlay({
         {title}
       </h1>
 
+      {/* Rematch: Player names */}
+      {mode === 'rematch' && playerNames && (
+        <p className="text-lg text-tg-text-secondary mb-2">
+          {playerNames.you} <span className="text-tg-hint">vs</span> {playerNames.opponent}
+        </p>
+      )}
+
       {/* Topic (if provided) */}
       {topic && (
-        <p className="text-tg-text-secondary mb-8 text-center px-8 truncate max-w-[280px]">
+        <p className="text-tg-text-secondary mb-2 text-center px-8 truncate max-w-[280px]">
           «{topic}»
         </p>
+      )}
+
+      {/* Rematch: Additional info */}
+      {mode === 'rematch' && (difficulty || questionsCount) && (
+        <p className="text-sm text-tg-hint mb-8">
+          {difficulty && (
+            <span className="capitalize">{difficulty}</span>
+          )}
+          {difficulty && questionsCount && ' • '}
+          {questionsCount && `${questionsCount} questions`}
+        </p>
+      )}
+
+      {mode === 'start' && topic && (
+        <div className="mb-8" />
       )}
 
       {/* Progress bar container */}

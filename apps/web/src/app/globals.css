@@ -543,3 +543,22 @@ body {
 .animate-loading-dot {
   animation: loading-dot 1.4s ease-in-out infinite;
 }
+
+/* Progress line animation for rematch button */
+@keyframes progress-line {
+  0% {
+    width: 0%;
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    width: 100%;
+    opacity: 0.6;
+  }
+}
+
+.animate-progress-line {
+  animation: progress-line 1.5s ease-in-out infinite;
+}

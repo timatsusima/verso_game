@@ -15,6 +15,7 @@ import { DuelHeader, type PlayerStatus } from '@/components/game/duel-header';
 import { DuelToasts, useDuelToasts } from '@/components/game/duel-toasts';
 import { UrgencyBanner, UrgencyVignette, UrgencyTimer } from '@/components/game/urgency-mode';
 import { DuelResultScreen, type DuelOutcome } from '@/components/game/duel-result-screen';
+import { DuelLoadingOverlay } from '@/components/game/duel-loading-overlay';
 import { cn } from '@/lib/utils';
 import type { PlayerAnswerInfo } from '@tg-duel/shared';
 
@@ -83,6 +84,7 @@ export default function PlayPage() {
   const [lastResult, setLastResult] = useState<typeof questionResults[0] | null>(null);
   const [showRematchOptions, setShowRematchOptions] = useState(false);
   const [isCreatingRematch, setIsCreatingRematch] = useState(false);
+  const [isRematchComplete, setIsRematchComplete] = useState(false);
   
   // Duel PvP State
   const [myStatus, setMyStatus] = useState<PlayerStatus>('thinking');
@@ -232,7 +234,17 @@ export default function PlayPage() {
   };
 
   const handleRematch = async (sameTopic: boolean) => {
+    // Prevent double clicks
+    if (isCreatingRematch) return;
+
+    // Instant feedback: vibrate and set loading state
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate(10);
+    }
+    
     setIsCreatingRematch(true);
+    setIsRematchComplete(false);
+
     try {
       const response = await fetch('/api/duel/create', {
         method: 'POST',
@@ -253,10 +265,18 @@ export default function PlayPage() {
       }
 
       const data = await response.json();
-      router.push(`/duel/${data.duelId}/invite`);
+      
+      // Mark as complete to animate progress to 100%
+      setIsRematchComplete(true);
+      
+      // Wait for animation, then redirect
+      setTimeout(() => {
+        router.push(`/duel/${data.duelId}/invite`);
+      }, 500);
     } catch (err) {
       console.error('Rematch error:', err);
       setIsCreatingRematch(false);
+      setIsRematchComplete(false);
     }
   };
 
@@ -328,19 +348,41 @@ export default function PlayPage() {
       ? (opponent?.name || 'Opponent') 
       : (creator?.name || 'Opponent');
 
+    // Get difficulty name for display
+    const difficultyName = finalResult.results.length > 0 
+      ? 'medium' // We use medium for rematch, could be improved
+      : 'medium';
+
     return (
-      <DuelResultScreen
-        outcome={outcome}
-        myScore={myScore}
-        opponentScore={theirScore}
-        opponentName={opponentName}
-        topic={topic || ''}
-        stats={stats}
-        language={language}
-        onRematch={() => handleRematch(true)}
-        onNewTopic={() => router.push('/')}
-        isLoadingRematch={isCreatingRematch}
-      />
+      <>
+        {/* Rematch Loading Overlay */}
+        <DuelLoadingOverlay
+          isLoading={isCreatingRematch}
+          isComplete={isRematchComplete}
+          language={language}
+          topic={topic || ''}
+          mode="rematch"
+          playerNames={{
+            you: firstName || 'You',
+            opponent: opponentName,
+          }}
+          difficulty={difficultyName}
+          questionsCount={totalQuestions || 10}
+        />
+
+        <DuelResultScreen
+          outcome={outcome}
+          myScore={myScore}
+          opponentScore={theirScore}
+          opponentName={opponentName}
+          topic={topic || ''}
+          stats={stats}
+          language={language}
+          onRematch={() => handleRematch(true)}
+          onNewTopic={() => router.push('/')}
+          isLoadingRematch={isCreatingRematch}
+        />
+      </>
     );
   }
 

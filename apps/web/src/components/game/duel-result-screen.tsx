@@ -53,6 +53,7 @@ const TRANSLATIONS = {
     bestStreak: 'Лучшая серия',
     inARow: 'подряд',
     rematch: 'Реванш',
+    preparingRematch: 'Готовим реванш…',
     changeTopic: 'Сменить тему',
     share: 'Поделиться',
     drawChallenge: 'Решит реванш?',
@@ -81,6 +82,7 @@ const TRANSLATIONS = {
     bestStreak: 'Best streak',
     inARow: 'in a row',
     rematch: 'Rematch',
+    preparingRematch: 'Preparing rematch…',
     changeTopic: 'Change topic',
     share: 'Share',
     drawChallenge: 'Rematch decides?',
@@ -308,15 +310,32 @@ export function DuelResultScreen({
           fullWidth
           size="lg"
           onClick={onRematch}
-          isLoading={isLoadingRematch}
+          disabled={isLoadingRematch}
           className={cn(
-            'font-bold text-lg h-14 transition-all',
+            'font-bold text-lg h-14 transition-all relative overflow-hidden',
             outcome === 'win' && 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 shadow-lg shadow-green-500/30',
             outcome === 'lose' && 'bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-400 hover:to-red-400 shadow-lg shadow-orange-500/30',
-            outcome === 'draw' && 'bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 shadow-lg shadow-amber-500/30 text-black'
+            outcome === 'draw' && 'bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 shadow-lg shadow-amber-500/30 text-black',
+            isLoadingRematch && 'opacity-75 cursor-not-allowed'
           )}
         >
-          {outcome === 'lose' ? '🔥' : '⚔️'} {t.rematch}
+          <span className="flex items-center justify-center gap-2">
+            {isLoadingRematch ? (
+              <>
+                <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                <span>{t.preparingRematch}</span>
+              </>
+            ) : (
+              <>
+                {outcome === 'lose' ? '🔥' : '⚔️'} {t.rematch}
+              </>
+            )}
+          </span>
+          
+          {/* Progress line at bottom when loading */}
+          {isLoadingRematch && (
+            <div className="absolute bottom-0 left-0 h-1 bg-white/30 animate-progress-line" />
+          )}
         </Button>
 
         {/* Secondary: Change Topic */}
