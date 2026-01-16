@@ -116,6 +116,7 @@ export function DuelResultScreen({
   onNewTopic,
   onShare,
   isLoadingRematch,
+  rating,
 }: DuelResultScreenProps) {
   const t = TRANSLATIONS[language];
   const outcomeData = t[outcome];
