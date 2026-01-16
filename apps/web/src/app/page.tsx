@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Card } from '@/components/ui/card';
 import { DuelLoadingOverlay } from '@/components/game/duel-loading-overlay';
+import { RatingDisplay } from '@/components/game/rating-display';
 import { useTranslations } from '@/hooks/use-translations';
 import type { Language, DifficultyLevel } from '@tg-duel/shared';
 
@@ -331,12 +332,19 @@ function HomePageContent() {
       />
 
       {/* Header */}
-      <div className="text-center mb-8">
+      <div className="text-center mb-6">
         <h1 className="text-3xl font-bold mb-2">🎯 Duel Quiz</h1>
         <p className="text-tg-text-secondary">
           {language === 'ru' ? `Привет, ${displayName}!` : `Hey, ${displayName}!`}
         </p>
       </div>
+
+      {/* Rating Display */}
+      {isAuthenticated && (
+        <div className="mb-6">
+          <RatingDisplay language={language} />
+        </div>
+      )}
 
       {/* Create Duel Form */}
       <Card variant="bordered" className="flex-1 animate-slide-up">

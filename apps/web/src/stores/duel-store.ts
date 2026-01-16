@@ -19,6 +19,7 @@ interface DuelState {
   topic: string | null;
   questionsCount: number;
   status: DuelStatus | null;
+  isRanked: boolean;
   
   // Players
   creator: Player | null;
@@ -54,6 +55,7 @@ interface DuelState {
     topic: string;
     questionsCount: number;
     status: DuelStatus;
+    isRanked?: boolean;
   }) => void;
   setPlayers: (creator: Player, opponent: Player | null, myPlayerId: string) => void;
   setCurrentQuestion: (question: SanitizedQuestion, totalQuestions: number) => void;
@@ -76,6 +78,7 @@ const initialState = {
   topic: null,
   questionsCount: 10,
   status: null,
+  isRanked: false,
   creator: null,
   opponent: null,
   myPlayerId: null,
@@ -103,6 +106,7 @@ export const useDuelStore = create<DuelState>((set) => ({
       topic: info.topic,
       questionsCount: info.questionsCount,
       status: info.status,
+      isRanked: info.isRanked ?? false,
     }),
 
   setPlayers: (creator, opponent, myPlayerId) =>

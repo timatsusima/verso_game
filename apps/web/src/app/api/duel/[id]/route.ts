@@ -79,6 +79,7 @@ export async function GET(
         opponentId: duel.opponentId,
         creator: duel.creator,
         opponent: duel.opponent,
+        isRanked: duel.isRanked,
       },
       questions: sanitizedQuestions,
       packCommit: duel.pack.commitHash,

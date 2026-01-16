@@ -37,6 +37,7 @@ interface DuelResultScreenProps {
     my: RatingData | null;
     opponent: RatingData | null;
   };
+  isRanked?: boolean;
 }
 
 const TRANSLATIONS = {
@@ -101,6 +102,8 @@ const TRANSLATIONS = {
     drawChallenge: 'Rematch decides?',
     skillRating: 'SR',
     ratingChange: 'Rating',
+    unranked: 'Unranked',
+    unrankedNote: 'does not affect rating',
   },
 };
 
@@ -117,6 +120,7 @@ export function DuelResultScreen({
   onShare,
   isLoadingRematch,
   rating,
+  isRanked = false,
 }: DuelResultScreenProps) {
   const t = TRANSLATIONS[language];
   const outcomeData = t[outcome];
@@ -304,8 +308,8 @@ export function DuelResultScreen({
         </div>
       )}
 
-      {/* Rating display (if ranked) */}
-      {rating?.my && (
+      {/* Rating display (if ranked) or Unranked badge */}
+      {isRanked && rating?.my ? (
         <Card variant="glass" className="mb-5 animate-slide-up">
           <div className="py-4 px-4">
             <p className="text-center text-xs text-tg-hint mb-3">
@@ -348,6 +352,17 @@ export function DuelResultScreen({
                 </>
               )}
             </div>
+          </div>
+        </Card>
+      ) : !isRanked && (
+        <Card variant="glass" className="mb-5 animate-slide-up">
+          <div className="py-3 px-4 text-center">
+            <p className="text-sm font-medium text-tg-text-secondary">
+              {t.unranked}
+            </p>
+            <p className="text-xs text-tg-hint mt-1">
+              {t.unrankedNote}
+            </p>
           </div>
         </Card>
       )}

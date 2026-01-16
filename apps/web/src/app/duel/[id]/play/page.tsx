@@ -72,6 +72,7 @@ export default function PlayPage() {
     finalResult,
     isConnected,
     error,
+    isRanked,
     setMyAnswer,
     reset,
   } = useDuelStore();
@@ -408,6 +409,7 @@ export default function PlayPage() {
           onNewTopic={() => router.push('/')}
           isLoadingRematch={isCreatingRematch}
           rating={ratingData || undefined}
+          isRanked={isRanked}
         />
       </>
     );
