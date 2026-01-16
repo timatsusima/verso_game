@@ -92,6 +92,10 @@ export default function PlayPage() {
   const [isFirstAnswerer, setIsFirstAnswerer] = useState<string | null>(null);
   const [isUrgencyMode, setIsUrgencyMode] = useState(false);
   const [playerTimings, setPlayerTimings] = useState<PlayerTimingInfo[]>([]);
+  const [ratingData, setRatingData] = useState<{
+    my: { srBefore: number; srAfter: number; delta: number; leagueName: string } | null;
+    opponent: { srBefore: number; srAfter: number; delta: number; leagueName: string } | null;
+  } | null>(null);
   const questionIndexRef = useRef(currentQuestionIndex);
   
   // Toasts
@@ -163,14 +167,36 @@ export default function PlayPage() {
       }
     };
 
+    // Rating updated
+    const handleRatingUpdated = (data: {
+      creator: { srBefore: number; srAfter: number; delta: number; leagueName: string };
+      opponent: { srBefore: number; srAfter: number; delta: number; leagueName: string } | null;
+    }) => {
+      console.log('Rating updated:', data);
+      
+      if (isCreator) {
+        setRatingData({
+          my: data.creator,
+          opponent: data.opponent,
+        });
+      } else {
+        setRatingData({
+          my: data.opponent || null,
+          opponent: data.creator,
+        });
+      }
+    };
+
     socket.on('duel:playerAnswered', handlePlayerAnswered);
     socket.on('duel:secondTimerStarted', handleSecondTimerStarted);
+    socket.on('duel:ratingUpdated', handleRatingUpdated);
 
     return () => {
       socket.off('duel:playerAnswered', handlePlayerAnswered);
       socket.off('duel:secondTimerStarted', handleSecondTimerStarted);
+      socket.off('duel:ratingUpdated', handleRatingUpdated);
     };
-  }, [socket, userId, addToast, t]);
+  }, [socket, userId, addToast, t, isCreator]);
 
   // Handle question results
   useEffect(() => {
@@ -381,6 +407,7 @@ export default function PlayPage() {
           onRematch={() => handleRematch(true)}
           onNewTopic={() => router.push('/')}
           isLoadingRematch={isCreatingRematch}
+          rating={ratingData || undefined}
         />
       </>
     );

@@ -14,6 +14,13 @@ interface DuelStats {
   bestStreak: number;
 }
 
+interface RatingData {
+  srBefore: number;
+  srAfter: number;
+  delta: number;
+  leagueName: string;
+}
+
 interface DuelResultScreenProps {
   outcome: DuelOutcome;
   myScore: number;
@@ -26,6 +33,10 @@ interface DuelResultScreenProps {
   onNewTopic: () => void;
   onShare?: () => void;
   isLoadingRematch?: boolean;
+  rating?: {
+    my: RatingData | null;
+    opponent: RatingData | null;
+  };
 }
 
 const TRANSLATIONS = {
@@ -57,6 +68,8 @@ const TRANSLATIONS = {
     changeTopic: 'Сменить тему',
     share: 'Поделиться',
     drawChallenge: 'Решит реванш?',
+    skillRating: 'SR',
+    ratingChange: 'Рейтинг',
   },
   en: {
     win: {
@@ -86,6 +99,8 @@ const TRANSLATIONS = {
     changeTopic: 'Change topic',
     share: 'Share',
     drawChallenge: 'Rematch decides?',
+    skillRating: 'SR',
+    ratingChange: 'Rating',
   },
 };
 
@@ -286,6 +301,54 @@ export function DuelResultScreen({
             </div>
           )}
         </div>
+      )}
+
+      {/* Rating display (if ranked) */}
+      {rating?.my && (
+        <Card variant="glass" className="mb-5 animate-slide-up">
+          <div className="py-4 px-4">
+            <p className="text-center text-xs text-tg-hint mb-3">
+              {t.skillRating} ({rating.my.leagueName})
+            </p>
+            <div className="flex items-center justify-center gap-4">
+              <div className="text-center">
+                <p className="text-xs text-tg-text-secondary mb-1">{t.you}</p>
+                <p className="text-lg font-bold tabular-nums">
+                  {rating.my.srBefore} → {rating.my.srAfter}
+                </p>
+                <p className={cn(
+                  'text-xs font-medium',
+                  rating.my.delta > 0 && 'text-green-400',
+                  rating.my.delta < 0 && 'text-red-400',
+                  rating.my.delta === 0 && 'text-tg-text-secondary'
+                )}>
+                  {rating.my.delta > 0 ? '+' : ''}{rating.my.delta}
+                </p>
+              </div>
+              {rating.opponent && (
+                <>
+                  <div className="text-tg-hint">:</div>
+                  <div className="text-center">
+                    <p className="text-xs text-tg-text-secondary mb-1 truncate max-w-[100px]">
+                      {displayOpponentName}
+                    </p>
+                    <p className="text-lg font-bold tabular-nums">
+                      {rating.opponent.srBefore} → {rating.opponent.srAfter}
+                    </p>
+                    <p className={cn(
+                      'text-xs font-medium',
+                      rating.opponent.delta > 0 && 'text-green-400',
+                      rating.opponent.delta < 0 && 'text-red-400',
+                      rating.opponent.delta === 0 && 'text-tg-text-secondary'
+                    )}>
+                      {rating.opponent.delta > 0 ? '+' : ''}{rating.opponent.delta}
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </Card>
       )}
 
       {/* Draw special message */}

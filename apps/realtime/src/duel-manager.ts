@@ -618,8 +618,50 @@ export class DuelManager {
     // Send final result
     this.io.to(this.getRoomName(state.duelId)).emit('duel:finished', finalResult);
 
+    // Process rating asynchronously (don't block)
+    this.processRating(state, results).catch(err => {
+      console.error('Rating processing error:', err);
+    });
+
     // Cleanup
     this.cleanup(state.duelId);
+  }
+
+  /**
+   * Process rating after duel finishes
+   */
+  private async processRating(
+    state: DuelState,
+    questionResults: QuestionResult[]
+  ) {
+    if (!state.opponent) return;
+
+    // Call rating API endpoint (it will fetch data from DB)
+    const apiUrl = process.env.RATING_API_URL || process.env.CORS_ORIGIN || 'http://localhost:3000';
+    try {
+      const response = await fetch(`${apiUrl}/api/duel/${state.duelId}/finish`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({}),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Rating processed:', data);
+        
+        // Emit rating update to players
+        if (data.rating) {
+          this.io.to(this.getRoomName(state.duelId)).emit('duel:ratingUpdated', {
+            creator: data.rating.creator,
+            opponent: data.rating.opponent,
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Failed to process rating:', error);
+    }
   }
 
   /**

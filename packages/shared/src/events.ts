@@ -124,6 +124,22 @@ export interface ServerToClientEvents {
     playerId: string;
     playerName: string;
   }) => void;
+  
+  // Rating updated after match
+  'duel:ratingUpdated': (data: {
+    creator: {
+      srBefore: number;
+      srAfter: number;
+      delta: number;
+      leagueName: string;
+    };
+    opponent: {
+      srBefore: number;
+      srAfter: number;
+      delta: number;
+      leagueName: string;
+    } | null;
+  }) => void;
 }
 
 // ============ Inter-Server Events (reserved) ============

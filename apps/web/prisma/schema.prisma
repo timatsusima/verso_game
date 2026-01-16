@@ -23,6 +23,7 @@ model User {
   joinedDuels   Duel[]       @relation("DuelOpponent")
   wonDuels      Duel[]       @relation("DuelWinner")
   answers       DuelAnswer[]
+  rating        UserRating?
 
   @@index([telegramId])
 }
@@ -34,6 +35,7 @@ model Duel {
   language       String    @default("en")
   difficulty     String    @default("medium") // easy, medium, hard
   status         String    @default("waiting") // waiting, ready, in_progress, finished
+  isRanked       Boolean   @default(false) // Ranked mode affects SR
   
   creatorId      String
   creator        User      @relation("DuelCreator", fields: [creatorId], references: [id])
@@ -51,10 +53,12 @@ model Duel {
   // Relations
   pack           DuelPack?
   answers        DuelAnswer[]
+  matchResult    MatchResult?
 
   @@index([creatorId])
   @@index([opponentId])
   @@index([status])
+  @@index([isRanked])
 }
 
 model DuelPack {
@@ -129,4 +133,53 @@ model QuestionBank {
   @@index([fingerprint])
   @@index([lastServedAt])
   @@index([timesServed])
+}
+
+// ============ Skill Rating System ============
+
+model UserRating {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  sr           Int      @default(1000) // Skill Rating (0-30000)
+  rd           Int      @default(350)  // Rating Deviation (80-350)
+  gamesPlayed  Int      @default(0)
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([sr])
+  @@index([gamesPlayed])
+}
+
+model MatchResult {
+  id              String   @id @default(cuid())
+  duelId          String   @unique
+  duel            Duel     @relation(fields: [duelId], references: [id], onDelete: Cascade)
+  
+  isRanked        Boolean  @default(false)
+  topicNorm       String
+  
+  totalQuestions  Int
+  
+  // Creator stats
+  creatorCorrectCount  Int
+  creatorFasterCount   Int
+  creatorSrBefore      Int
+  creatorSrAfter       Int
+  creatorDelta         Int
+  
+  // Opponent stats
+  opponentCorrectCount Int
+  opponentFasterCount  Int
+  opponentSrBefore     Int
+  opponentSrAfter      Int
+  opponentDelta        Int
+  
+  createdAt       DateTime @default(now())
+
+  @@index([duelId])
+  @@index([isRanked])
+  @@index([createdAt])
 }
