@@ -43,6 +43,7 @@ function HomePageContent() {
   } = useAuthStore();
   
   const [showLanguageSelect, setShowLanguageSelect] = useState(false);
+  const [showCreateForm, setShowCreateForm] = useState(false);
   const [topic, setTopic] = useState('');
   const [questionsCount, setQuestionsCount] = useState<10 | 20 | 30>(10);
   const [difficulty, setDifficulty] = useState<DifficultyLevel>('medium');
@@ -346,8 +347,34 @@ function HomePageContent() {
         </div>
       )}
 
+      {/* Game Mode Selection */}
+      {!showCreateForm && (
+        <div className="mb-6 space-y-3">
+          <Button
+            fullWidth
+            size="lg"
+            variant="primary"
+            onClick={() => router.push('/matchmaking')}
+            className="h-16 text-lg font-bold bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-400 hover:to-purple-500 shadow-lg shadow-blue-500/30"
+          >
+            ⚔️ {language === 'ru' ? 'Играть на рейтинг' : 'Play Ranked'}
+          </Button>
+          
+          <Button
+            fullWidth
+            size="lg"
+            variant="secondary"
+            onClick={() => setShowCreateForm(true)}
+            className="h-16 text-lg font-medium"
+          >
+            👥 {language === 'ru' ? 'Дуэль с другом' : 'Duel with Friend'}
+          </Button>
+        </div>
+      )}
+
       {/* Create Duel Form */}
-      <Card variant="bordered" className="flex-1 animate-slide-up">
+      {showCreateForm && (
+        <Card variant="bordered" className="flex-1 animate-slide-up">
         <h2 className="text-xl font-bold mb-6">{t('createDuel')}</h2>
 
         <div className="space-y-6">
@@ -394,8 +421,19 @@ function HomePageContent() {
           >
             {t('start')} 🚀
           </Button>
+          
+          {/* Back to mode selection */}
+          <Button
+            fullWidth
+            variant="ghost"
+            onClick={() => setShowCreateForm(false)}
+            className="mt-2"
+          >
+            {language === 'ru' ? '← Назад' : '← Back'}
+          </Button>
         </div>
       </Card>
+      )}
 
       {/* Language Switcher */}
       <div className="mt-4 flex justify-center gap-2">
