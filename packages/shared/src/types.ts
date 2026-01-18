@@ -37,6 +37,7 @@ export interface SanitizedQuestion extends Question {
 // ============ Duel ============
 export type DuelStatus = 
   | 'waiting'      // Waiting for second player
+  | 'pending'      // Matchmaking: duel created, waiting for both players to join
   | 'ready'        // Both players joined, waiting to start
   | 'in_progress'  // Quiz is running
   | 'finished';    // Quiz completed
