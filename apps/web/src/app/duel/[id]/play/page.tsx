@@ -13,7 +13,7 @@ import { ScoreDisplay } from '@/components/game/score-display';
 import { ProgressBar } from '@/components/game/progress-bar';
 import { DuelHeader, type PlayerStatus } from '@/components/game/duel-header';
 import { DuelToasts, useDuelToasts } from '@/components/game/duel-toasts';
-import { UrgencyBanner, UrgencyVignette, UrgencyTimer } from '@/components/game/urgency-mode';
+import { UrgencyHUD, UrgencyTimer } from '@/components/game/urgency-mode';
 import { DuelResultScreen, type DuelOutcome } from '@/components/game/duel-result-screen';
 import { DuelLoadingOverlay } from '@/components/game/duel-loading-overlay';
 import { cn } from '@/lib/utils';
@@ -199,7 +199,7 @@ export default function PlayPage() {
         setRivalStatus('answered');
         if (data.isFirst) {
           setIsFirstAnswerer(data.playerId);
-          addToast(t('opponentAnsweredFirst'), 'warning');
+          // Don't show toast - UrgencyHUD will show when timer starts
         } else {
           addToast(t('opponentPickedAnswer'), 'info');
         }
@@ -214,10 +214,9 @@ export default function PlayPage() {
     }) => {
       console.log('Second timer started:', data);
       
-      // Show overlay only for second player
+      // Activate urgency mode for second player (no toast - UrgencyHUD will show)
       if (data.secondPlayerId === userId) {
         setIsUrgencyMode(true);
-        addToast(t('hurryUpToast'), 'danger', 3000);
       }
     };
 
@@ -598,24 +597,10 @@ export default function PlayPage() {
   // Game in progress
   return (
     <div className={cn(
-      'flex-1 flex flex-col p-4 transition-all duration-300 relative'
+      'flex-1 flex flex-col p-4 transition-all duration-300'
     )}>
-      {/* Urgency mode effects */}
-      <UrgencyVignette isActive={isUrgencyMode && !hasAnswered} />
-      
       {/* Toasts */}
       <DuelToasts toasts={toasts} onRemove={removeToast} />
-
-      {/* Urgency banner overlay - absolutely positioned, doesn't affect layout */}
-      {isUrgencyMode && !hasAnswered && (
-        <div className="absolute left-0 right-0 top-[280px] z-50 flex flex-col items-center gap-2 pointer-events-none px-4">
-          <UrgencyBanner
-            isActive={isUrgencyMode && !hasAnswered}
-            timeRemaining={displayTime}
-            language={language}
-          />
-        </div>
-      )}
 
       {/* Duel Header with PvP indicators */}
       <DuelHeader
@@ -646,6 +631,15 @@ export default function PlayPage() {
         total={totalQuestions}
         className={cn('mb-4', isLocked && 'animate-progress-pulse')}
       />
+
+      {/* Urgency HUD - fixed height container to prevent layout shift */}
+      <div className="h-10 mb-2">
+        <UrgencyHUD
+          isActive={isUrgencyMode && !hasAnswered && displayTime > 0}
+          timeRemaining={displayTime}
+          language={language}
+        />
+      </div>
 
       {/* Timer */}
       <div className="flex justify-center mb-4">

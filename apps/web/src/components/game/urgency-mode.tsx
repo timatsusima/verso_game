@@ -1,97 +1,64 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { cn } from '@/lib/utils';
 
-interface UrgencyBannerProps {
+interface UrgencyHUDProps {
   isActive: boolean;
   timeRemaining: number;
   language: 'ru' | 'en';
 }
 
 /**
- * Non-blocking banner that shows when opponent answered first.
- * Positioned above the question, doesn't obstruct content.
+ * Compact HUD bar for urgency mode.
+ * Shows when opponent answered first, displays countdown.
+ * Fixed height to prevent layout shift.
  */
-export function UrgencyBanner({ isActive, timeRemaining, language }: UrgencyBannerProps) {
-  const [isVisible, setIsVisible] = useState(false);
-
+export function UrgencyHUD({ isActive, timeRemaining, language }: UrgencyHUDProps) {
   useEffect(() => {
-    if (isActive) {
-      setIsVisible(true);
-      // Vibrate on activation
-      if (typeof navigator !== 'undefined' && navigator.vibrate) {
-        navigator.vibrate([80, 40, 80]);
-      }
-    } else {
-      setIsVisible(false);
+    if (isActive && typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate([80, 40, 80]);
     }
   }, [isActive]);
 
-  if (!isVisible) return null;
-
   const isCritical = timeRemaining <= 5;
   const text = language === 'ru' 
-    ? '⚡ Соперник ответил. У тебя' 
-    : '⚡ Opponent answered. You have';
+    ? 'Соперник ответил первым — осталось' 
+    : 'Opponent answered first —';
 
   return (
     <div
       className={cn(
-        'w-full max-w-md mx-auto py-3 px-4 rounded-xl',
-        'flex items-center justify-center gap-3',
+        'h-10 flex items-center justify-center gap-2',
         'transition-all duration-300',
-        'animate-urgency-slide-in',
-        'pointer-events-none',
-        isCritical 
-          ? 'bg-gradient-to-r from-red-600/30 to-red-500/30 border border-red-500/50' 
-          : 'bg-gradient-to-r from-orange-600/25 to-amber-500/25 border border-orange-500/40'
+        isActive 
+          ? 'opacity-100 translate-y-0' 
+          : 'opacity-0 -translate-y-2 pointer-events-none'
       )}
     >
-      <span className={cn(
-        'text-sm font-medium',
-        isCritical ? 'text-red-300' : 'text-orange-300'
-      )}>
-        {text}
-      </span>
-      <span className={cn(
-        'text-xl font-black tabular-nums min-w-[2ch]',
-        isCritical ? 'text-red-400 animate-pulse-fast' : 'text-orange-400 animate-pulse'
-      )}>
-        {timeRemaining}
-      </span>
-      <span className={cn(
-        'text-sm font-medium',
-        isCritical ? 'text-red-300' : 'text-orange-300'
-      )}>
-        {language === 'ru' ? 'сек' : 'sec'}
-      </span>
-    </div>
-  );
-}
-
-/**
- * Vignette effect around screen edges.
- * Doesn't obstruct center content, creates focus effect.
- */
-export function UrgencyVignette({ isActive }: { isActive: boolean }) {
-  if (!isActive) return null;
-
-  return (
-    <div 
-      className={cn(
-        'fixed inset-0 pointer-events-none z-40',
-        'animate-fade-in'
+      {isActive && (
+        <div
+          className={cn(
+            'max-w-md mx-auto px-4 py-2 rounded-lg',
+            'flex items-center justify-center gap-2',
+            'text-sm font-medium',
+            isCritical 
+              ? 'bg-red-500/20 border border-red-500/40 text-red-300' 
+              : 'bg-orange-500/20 border border-orange-500/40 text-orange-300'
+          )}
+        >
+          <span>⚡</span>
+          <span>{text}</span>
+          <span className={cn(
+            'font-black tabular-nums min-w-[2ch]',
+            isCritical ? 'text-red-400' : 'text-orange-400'
+          )}>
+            {timeRemaining}
+          </span>
+          <span className="text-xs">{language === 'ru' ? 'сек' : 'sec'}</span>
+        </div>
       )}
-      style={{
-        background: `radial-gradient(
-          ellipse 80% 70% at 50% 50%,
-          transparent 40%,
-          rgba(239, 68, 68, 0.08) 70%,
-          rgba(239, 68, 68, 0.15) 100%
-        )`,
-      }}
-    />
+    </div>
   );
 }
 
@@ -113,17 +80,19 @@ export function UrgencyTimer({ seconds, isUrgencyMode }: UrgencyTimerProps) {
       <div
         className={cn(
           'font-mono font-black tabular-nums transition-all duration-300',
-          // Size based on mode
-          isUrgencyMode ? 'text-6xl' : 'text-4xl',
-          // Color based on time
+          // Size - keep consistent, don't change size in urgency mode
+          'text-4xl',
+          // Color based on mode and time
           !isUrgencyMode && seconds > 10 && 'text-tg-text',
           !isUrgencyMode && seconds <= 10 && seconds > 5 && 'text-duel-warning animate-pulse',
-          isUrgencyMode && !isCritical && 'text-orange-400 animate-urgency-pulse',
-          isUrgencyMode && isCritical && !isVeryLow && 'text-red-400 animate-urgency-pulse',
-          isUrgencyMode && isVeryLow && 'text-red-400 animate-urgency-shake',
-          // Shadow for urgency
-          isUrgencyMode && 'drop-shadow-[0_0_15px_rgba(251,146,60,0.5)]',
-          isUrgencyMode && isCritical && 'drop-shadow-[0_0_20px_rgba(239,68,68,0.6)]'
+          isUrgencyMode && !isCritical && 'text-orange-400',
+          isUrgencyMode && isCritical && !isVeryLow && 'text-red-400',
+          isUrgencyMode && isVeryLow && 'text-red-400',
+          // Subtle pulse animation for urgency
+          isUrgencyMode && 'animate-[pulse_1s_ease-in-out_infinite]',
+          // Subtle glow for urgency
+          isUrgencyMode && !isCritical && 'drop-shadow-[0_0_10px_rgba(251,146,60,0.4)]',
+          isUrgencyMode && isCritical && 'drop-shadow-[0_0_12px_rgba(239,68,68,0.5)]'
         )}
       >
         {seconds}
@@ -132,7 +101,7 @@ export function UrgencyTimer({ seconds, isUrgencyMode }: UrgencyTimerProps) {
       {/* Progress bar */}
       <div className={cn(
         'h-2 rounded-full overflow-hidden transition-all duration-300',
-        isUrgencyMode ? 'w-24' : 'w-16',
+        'w-16',
         'bg-white/10'
       )}>
         <div
@@ -140,8 +109,8 @@ export function UrgencyTimer({ seconds, isUrgencyMode }: UrgencyTimerProps) {
             'h-full transition-all duration-1000 ease-linear rounded-full',
             !isUrgencyMode && seconds > 10 && 'bg-blue-500',
             !isUrgencyMode && seconds <= 10 && 'bg-duel-warning',
-            isUrgencyMode && !isCritical && 'bg-orange-500 animate-pulse',
-            isUrgencyMode && isCritical && 'bg-red-500 animate-pulse-fast'
+            isUrgencyMode && !isCritical && 'bg-orange-500',
+            isUrgencyMode && isCritical && 'bg-red-500'
           )}
           style={{ width: `${(seconds / (isUrgencyMode ? 10 : 60)) * 100}%` }}
         />
