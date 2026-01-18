@@ -257,11 +257,19 @@ export class DuelManager {
     // Update socket reference - CRITICAL: use the state from cache directly
     if (isCreator) {
       state.creator.odSocket = socket.id;
-      console.log(`[DuelManager] Creator ${userName} joined duel ${duelId}, socket: ${socket.id}`);
+      // Update name if it's empty or default
+      if (!state.creator.odName || state.creator.odName === 'Player 1' || state.creator.odName.startsWith('Player ')) {
+        state.creator.odName = userName || state.creator.odName || 'Player 1';
+      }
+      console.log(`[DuelManager] Creator ${userName} joined duel ${duelId}, socket: ${socket.id}, odName: ${state.creator.odName}`);
       console.log(`[DuelManager] State after creator join - creator socket: ${state.creator.odSocket}, opponent socket: ${state.opponent?.odSocket}`);
     } else if (isOpponent && state.opponent) {
       state.opponent.odSocket = socket.id;
-      console.log(`[DuelManager] Opponent ${userName} joined duel ${duelId}, socket: ${socket.id}`);
+      // Update name if it's empty or default
+      if (!state.opponent.odName || state.opponent.odName === 'Player 2' || state.opponent.odName.startsWith('Player ')) {
+        state.opponent.odName = userName || state.opponent.odName || 'Player 2';
+      }
+      console.log(`[DuelManager] Opponent ${userName} joined duel ${duelId}, socket: ${socket.id}, odName: ${state.opponent.odName}`);
       console.log(`[DuelManager] State after opponent join - creator socket: ${state.creator.odSocket}, opponent socket: ${state.opponent.odSocket}`);
     }
 
