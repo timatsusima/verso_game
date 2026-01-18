@@ -425,7 +425,9 @@ export class DuelManager {
     const deadlineAt = state.questionStartTime + QUESTION_TIME_LIMIT * 1000;
 
     // Send sanitized question (without correct answer)
-    this.io.to(this.getRoomName(state.duelId)).emit('duel:question', {
+    const roomName = this.getRoomName(state.duelId);
+    console.log(`[DuelManager] Emitting duel:question to room ${roomName} for question ${state.currentQuestionIndex + 1}`);
+    this.io.to(roomName).emit('duel:question', {
       question: {
         id: question.id,
         index: state.currentQuestionIndex,
