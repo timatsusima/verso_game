@@ -84,6 +84,7 @@ export class DuelManager {
     if (!duel) return null;
 
     // For pending duels (matchmaking), pack might not exist yet
+    // But we still need to create state so players can join
     const questions: QuestionWithAnswer[] = duel.pack 
       ? JSON.parse(duel.pack.questions)
       : [];

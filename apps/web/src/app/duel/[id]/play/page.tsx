@@ -316,9 +316,10 @@ export default function PlayPage() {
   };
 
   // Loading / Connection state
-  if (!isConnected && !finalResult) {
+  // Show loading if not connected OR if status is pending (matchmaking, generating questions)
+  if ((!isConnected || status === 'pending') && !finalResult) {
     // For matchmaking duels, show "Preparing match" instead of "Connecting"
-    const isMatchmaking = isRanked && status === 'pending';
+    const isMatchmaking = isRanked && (status === 'pending' || !isConnected);
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="text-center">
