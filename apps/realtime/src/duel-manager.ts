@@ -1308,15 +1308,30 @@ export class DuelManager {
       requesterSocket = this.findSocketByUserId(requesterId);
     }
 
-    // Notify the requester if socket exists
+    // Notify the requester (initiator) if socket exists
     if (requesterSocket && requesterId) {
       requesterSocket.emit('duel:rematchDeclined', {
         duelId,
         fromPlayerId: userId,
       });
-      console.log(`[DuelManager] Rematch declined by ${userId}`);
+      console.log(`[DuelManager] Rematch declined by ${userId}, notified requester ${requesterId} (socket: ${requesterSocket.id})`);
+      // #region agent log
+      debugLog('duel-manager.ts:handleRematchDecline', 'Rematch declined event sent to requester', {
+        duelId,
+        declinerUserId: userId,
+        requesterUserId: requesterId,
+        requesterSocketId: requesterSocket.id,
+      });
+      // #endregion
     } else {
-      console.log(`[DuelManager] Rematch declined by ${userId}, but requester socket not found`);
+      console.log(`[DuelManager] Rematch declined by ${userId}, but requester socket not found for ${requesterId}`);
+      // #region agent log
+      debugLog('duel-manager.ts:handleRematchDecline', 'Requester socket not found, cannot notify', {
+        duelId,
+        declinerUserId: userId,
+        requesterUserId: requesterId,
+      });
+      // #endregion
     }
   }
 }

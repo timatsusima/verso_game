@@ -116,12 +116,28 @@ export default function PlayPage() {
 
     const handleRematchAccepted = (data: { oldDuelId: string; newDuelId: string }) => {
       console.log('Rematch accepted, redirecting to:', data.newDuelId);
+      // Clear timeout if exists
+      if ((window as any).__rematchTimeoutCleanup) {
+        (window as any).__rematchTimeoutCleanup();
+        delete (window as any).__rematchTimeoutCleanup;
+      }
+      setIsCreatingRematch(false);
+      setIsRematchComplete(false);
       router.push(`/duel/${data.newDuelId}/play`);
     };
 
-    const handleRematchDeclined = () => {
-      console.log('Rematch declined');
+    const handleRematchDeclined = (data?: { duelId: string; fromPlayerId: string }) => {
+      console.log('[Rematch] Declined event received', data);
+      // Clear timeout if exists
+      if ((window as any).__rematchTimeoutCleanup) {
+        (window as any).__rematchTimeoutCleanup();
+        delete (window as any).__rematchTimeoutCleanup;
+      }
+      // Reset rematch request dialog (for opponent who received request)
       setRematchRequest(null);
+      // Reset loading state (for initiator who is waiting)
+      setIsCreatingRematch(false);
+      setIsRematchComplete(false);
       addToast(
         language === 'ru' ? 'Соперник отклонил реванш' : 'Opponent declined rematch',
         'info'
@@ -154,8 +170,13 @@ export default function PlayPage() {
       socket.off('duel:rematchAccepted', handleRematchAccepted as any);
       socket.off('duel:rematchDeclined', handleRematchDeclined as any);
       socket.off('error', handleError);
+      // Cleanup timeout if component unmounts
+      if ((window as any).__rematchTimeoutCleanup) {
+        (window as any).__rematchTimeoutCleanup();
+        delete (window as any).__rematchTimeoutCleanup;
+      }
     };
-  }, [socket, router, language, addToast, isCreatingRematch]);
+  }, [socket, router, language, addToast]);
 
   // Reset state when question changes
   useEffect(() => {
@@ -318,8 +339,33 @@ export default function PlayPage() {
 
     // For ranked/matchmaking duels, use Socket.IO rematch
     if (isRanked) {
+      console.log('[Rematch] Initiating rematch request for ranked duel');
       requestRematch();
       setIsCreatingRematch(true);
+      setIsRematchComplete(false);
+      
+      // Timeout fallback: if no accept/decline arrives in 20s, treat as canceled
+      const timeoutId = setTimeout(() => {
+        console.log('[Rematch] Timeout: no response received after 20s, canceling rematch');
+        setIsCreatingRematch(false);
+        setIsRematchComplete(false);
+        addToast(
+          language === 'ru' ? 'Время ожидания реванша истекло' : 'Rematch request timed out',
+          'warning'
+        );
+        // Clean up timeout reference
+        delete (window as any).__rematchTimeoutCleanup;
+      }, 20000);
+      
+      // Clear timeout when rematch is accepted or declined
+      const cleanup = () => {
+        clearTimeout(timeoutId);
+        delete (window as any).__rematchTimeoutCleanup;
+      };
+      
+      // Store cleanup function to call it when rematch completes
+      (window as any).__rematchTimeoutCleanup = cleanup;
+      
       return;
     }
 
