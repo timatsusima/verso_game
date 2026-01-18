@@ -98,7 +98,13 @@ export function useSocket(duelId: string | null) {
 
     socket.on('duel:joined', (data) => {
       console.log('Joined duel:', data);
+      console.log('Duel status:', data.state.status);
       handleStateUpdate(data.state);
+      // For pending status (matchmaking), we're connected but waiting for questions
+      if (data.state.status === 'pending') {
+        setConnected(true);
+        setStatus('pending');
+      }
     });
 
     socket.on('duel:playerJoined', (data) => {
