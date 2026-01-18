@@ -131,10 +131,14 @@ export class DuelManager {
     let state = this.duels.get(duelId) ?? null;
     
     if (!state) {
+      console.log(`[DuelManager] Loading duel ${duelId} from DB (not in cache)`);
       state = await this.loadDuelFromDb(duelId);
       if (state) {
         this.duels.set(duelId, state);
+        console.log(`[DuelManager] Duel ${duelId} loaded and cached`);
       }
+    } else {
+      console.log(`[DuelManager] Duel ${duelId} found in cache (creator socket: ${state.creator.odSocket}, opponent socket: ${state.opponent?.odSocket})`);
     }
     
     return state ?? null;
@@ -211,10 +215,10 @@ export class DuelManager {
     // Update socket reference
     if (isCreator) {
       state.creator.odSocket = socket.id;
-      console.log(`[DuelManager] Creator ${userName} joined duel ${duelId}`);
+      console.log(`[DuelManager] Creator ${userName} joined duel ${duelId}, socket: ${socket.id}`);
     } else if (isOpponent && state.opponent) {
       state.opponent.odSocket = socket.id;
-      console.log(`[DuelManager] Opponent ${userName} joined duel ${duelId}`);
+      console.log(`[DuelManager] Opponent ${userName} joined duel ${duelId}, socket: ${socket.id}`);
     }
 
     // Track player -> duel mapping
@@ -224,20 +228,28 @@ export class DuelManager {
     socket.join(this.getRoomName(duelId));
 
     // Check if both players are joined
-    const bothJoined = state.creator.odSocket !== null && 
-                       state.opponent !== null && 
-                       state.opponent.odSocket !== null;
+    // IMPORTANT: Get state again from cache to ensure we have latest socket references
+    const currentState = this.duels.get(duelId);
+    if (!currentState) {
+      console.error(`[DuelManager] State lost for duel ${duelId}!`);
+      socket.emit('error', { code: 'INTERNAL_ERROR', message: 'Duel state lost' });
+      return;
+    }
 
-    console.log(`[DuelManager] Both players joined: ${bothJoined} (creator: ${state.creator.odSocket !== null}, opponent: ${state.opponent?.odSocket !== null})`);
+    const bothJoined = currentState.creator.odSocket !== null && 
+                       currentState.opponent !== null && 
+                       currentState.opponent.odSocket !== null;
 
-    // Send joined event
+    console.log(`[DuelManager] Both players joined: ${bothJoined} (creator socket: ${currentState.creator.odSocket}, opponent socket: ${currentState.opponent?.odSocket})`);
+
+    // Send joined event (use currentState to ensure latest socket refs)
     socket.emit('duel:joined', {
       duelId,
-      state: this.buildGameState(state),
+      state: this.buildGameState(currentState),
     });
 
     // Notify others if this is a reconnection during game
-    if (state.status === 'in_progress') {
+    if (currentState.status === 'in_progress') {
       socket.to(this.getRoomName(duelId)).emit('duel:playerReconnected', {
         playerId: userId,
         playerName: userName,
@@ -245,9 +257,9 @@ export class DuelManager {
     }
 
     // For matchmaking duels: if both joined and no pack exists, generate questions and start
-    if (bothJoined && state.status === 'pending' && state.questions.length === 0) {
+    if (bothJoined && currentState.status === 'pending' && currentState.questions.length === 0) {
       console.log(`[DuelManager] Both players joined matchmaking duel ${duelId}, generating questions...`);
-      await this.generateQuestionsAndStart(duelId, state);
+      await this.generateQuestionsAndStart(duelId, currentState);
     }
   }
 
