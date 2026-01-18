@@ -241,90 +241,84 @@ export class MatchmakingManager {
     player2: QueuedPlayer,
     language: 'ru' | 'en'
   ): Promise<void> {
-    console.log(`[Matchmaking] Match found: ${player1.userName} vs ${player2.userName}`);
+    console.log(`[Matchmaking] ✅ Match found: ${player1.userName} (SR: ${player1.sr}) vs ${player2.userName} (SR: ${player2.sr})`);
 
-    // Remove from queues
-    this.queues.get(language)!.delete(player1.userId);
-    this.queues.get(language)!.delete(player2.userId);
-    this.ranges.delete(player1.userId);
-    this.ranges.delete(player2.userId);
-
-    // Create duel in database
-    // Use default topic for ranked matches (can be improved later)
+    // Create duel in database FIRST (status="pending", no pack yet)
     const defaultTopic = language === 'ru' ? 'Общая эрудиция' : 'General Knowledge';
     
+    let duel;
     try {
-      const duel = await prisma.duel.create({
+      duel = await prisma.duel.create({
         data: {
           topic: defaultTopic,
           questionsCount: 10, // Default for ranked
           language,
           difficulty: 'medium', // Default for ranked
-          status: 'ready',
+          status: 'pending', // Will be changed to 'ready' when both players join and questions are generated
           isRanked: true,
           creatorId: player1.userId,
           opponentId: player2.userId,
         },
       });
 
-      // Generate questions via API call
-      const apiUrl = process.env.RATING_API_URL || process.env.CORS_ORIGIN || 'http://localhost:3000';
-      try {
-        console.log(`[Matchmaking] Generating questions for duel ${duel.id}...`);
-        const response = await fetch(`${apiUrl}/api/duel/${duel.id}/generate-questions`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`Failed to generate questions: ${response.status} ${errorText}`);
-        }
-
-        console.log(`[Matchmaking] Questions generated for duel ${duel.id}`);
-      } catch (error) {
-        console.error('[Matchmaking] Failed to generate questions:', error);
-        // Don't fail the match - questions can be generated later when duel starts
-      }
-
-      // Notify both players
-      const socket1 = this.io.sockets.sockets.get(player1.socketId);
-      const socket2 = this.io.sockets.sockets.get(player2.socketId);
-
-      if (socket1) {
-        socket1.emit('mm:found', {
-          duelId: duel.id,
-          opponent: {
-            id: player2.userId,
-            name: player2.userName,
-            sr: player2.sr,
-          },
-          isRanked: true,
-        });
-      }
-
-      if (socket2) {
-        socket2.emit('mm:found', {
-          duelId: duel.id,
-          opponent: {
-            id: player1.userId,
-            name: player1.userName,
-            sr: player1.sr,
-          },
-          isRanked: true,
-        });
-      }
-
-      console.log(`[Matchmaking] Duel created: ${duel.id}`);
+      console.log(`[Matchmaking] Duel created: ${duel.id} (status: pending)`);
     } catch (error) {
       console.error('[Matchmaking] Failed to create duel:', error);
       
       // Re-add players to queue on error
       this.queues.get(language)!.set(player1.userId, player1);
       this.queues.get(language)!.set(player2.userId, player2);
+      this.ranges.set(player1.userId, {
+        min: Math.max(0, player1.sr - INITIAL_SR_RANGE),
+        max: Math.min(30000, player1.sr + INITIAL_SR_RANGE),
+        expandedAt: Date.now(),
+      });
+      this.ranges.set(player2.userId, {
+        min: Math.max(0, player2.sr - INITIAL_SR_RANGE),
+        max: Math.min(30000, player2.sr + INITIAL_SR_RANGE),
+        expandedAt: Date.now(),
+      });
+      return;
     }
+
+    // Remove from queues AFTER successful duel creation
+    this.queues.get(language)!.delete(player1.userId);
+    this.queues.get(language)!.delete(player2.userId);
+    this.ranges.delete(player1.userId);
+    this.ranges.delete(player2.userId);
+    console.log(`[Matchmaking] Removed ${player1.userId} and ${player2.userId} from queue: matched`);
+
+    // Notify both players AFTER duel is created
+    const socket1 = this.io.sockets.sockets.get(player1.socketId);
+    const socket2 = this.io.sockets.sockets.get(player2.socketId);
+
+    if (socket1) {
+      console.log(`[Matchmaking] Sending mm:found to ${player1.userName} (${player1.socketId})`);
+      socket1.emit('mm:found', {
+        duelId: duel.id,
+        opponent: {
+          id: player2.userId,
+          name: player2.userName,
+          sr: player2.sr,
+        },
+        isRanked: true,
+      });
+    }
+
+    if (socket2) {
+      console.log(`[Matchmaking] Sending mm:found to ${player2.userName} (${player2.socketId})`);
+      socket2.emit('mm:found', {
+        duelId: duel.id,
+        opponent: {
+          id: player1.userId,
+          name: player1.userName,
+          sr: player1.sr,
+        },
+        isRanked: true,
+      });
+    }
+
+    console.log(`[Matchmaking] ✅ mm:found sent to both players for duel ${duel.id}`);
   }
 
   /**

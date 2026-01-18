@@ -81,9 +81,12 @@ export class DuelManager {
       },
     });
 
-    if (!duel || !duel.pack) return null;
+    if (!duel) return null;
 
-    const questions: QuestionWithAnswer[] = JSON.parse(duel.pack.questions);
+    // For pending duels (matchmaking), pack might not exist yet
+    const questions: QuestionWithAnswer[] = duel.pack 
+      ? JSON.parse(duel.pack.questions)
+      : [];
 
     return {
       duelId: duel.id,
@@ -92,8 +95,8 @@ export class DuelManager {
       language: duel.language as 'ru' | 'en',
       questionsCount: duel.questionsCount,
       questions,
-      seed: duel.pack.seed,
-      commitHash: duel.pack.commitHash,
+      seed: duel.pack?.seed || '',
+      commitHash: duel.pack?.commitHash || '',
       
       creator: {
         odId: duel.creatorId,
@@ -184,9 +187,12 @@ export class DuelManager {
    * Join a duel
    */
   async joinDuel(socket: TypedSocket, duelId: string, userId: string, userName: string) {
+    console.log(`[DuelManager] duel:join received from ${userName} (${userId}) for duel ${duelId}`);
+    
     const state = await this.getDuelState(duelId);
     
     if (!state) {
+      console.log(`[DuelManager] Duel ${duelId} not found`);
       socket.emit('error', { code: 'DUEL_NOT_FOUND', message: 'Duel not found' });
       return;
     }
@@ -196,6 +202,7 @@ export class DuelManager {
     const isOpponent = state.opponent?.odId === userId;
 
     if (!isCreator && !isOpponent) {
+      console.log(`[DuelManager] User ${userId} is not part of duel ${duelId}`);
       socket.emit('error', { code: 'NOT_IN_DUEL', message: 'You are not part of this duel' });
       return;
     }
@@ -203,8 +210,10 @@ export class DuelManager {
     // Update socket reference
     if (isCreator) {
       state.creator.odSocket = socket.id;
+      console.log(`[DuelManager] Creator ${userName} joined duel ${duelId}`);
     } else if (isOpponent && state.opponent) {
       state.opponent.odSocket = socket.id;
+      console.log(`[DuelManager] Opponent ${userName} joined duel ${duelId}`);
     }
 
     // Track player -> duel mapping
@@ -212,6 +221,13 @@ export class DuelManager {
 
     // Join socket room
     socket.join(this.getRoomName(duelId));
+
+    // Check if both players are joined
+    const bothJoined = state.creator.odSocket !== null && 
+                       state.opponent !== null && 
+                       state.opponent.odSocket !== null;
+
+    console.log(`[DuelManager] Both players joined: ${bothJoined} (creator: ${state.creator.odSocket !== null}, opponent: ${state.opponent?.odSocket !== null})`);
 
     // Send joined event
     socket.emit('duel:joined', {
@@ -227,7 +243,82 @@ export class DuelManager {
       });
     }
 
-    console.log(`Player ${userName} (${userId}) joined duel ${duelId}`);
+    // For matchmaking duels: if both joined and no pack exists, generate questions and start
+    if (bothJoined && state.status === 'pending' && state.questions.length === 0) {
+      console.log(`[DuelManager] Both players joined matchmaking duel ${duelId}, generating questions...`);
+      await this.generateQuestionsAndStart(duelId, state);
+    }
+  }
+
+  /**
+   * Generate questions for a matchmaking duel and start it
+   */
+  private async generateQuestionsAndStart(duelId: string, state: DuelState): Promise<void> {
+    try {
+      // Generate questions via API
+      const apiUrl = process.env.RATING_API_URL || process.env.CORS_ORIGIN || 'http://localhost:3000';
+      console.log(`[DuelManager] Generating questions for duel ${duelId} via ${apiUrl}/api/duel/${duelId}/generate-questions`);
+      
+      const response = await fetch(`${apiUrl}/api/duel/${duelId}/generate-questions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to generate questions: ${response.status} ${errorText}`);
+      }
+
+      console.log(`[DuelManager] Questions generated for duel ${duelId}, reloading state...`);
+
+      // Reload state from DB to get questions
+      const updatedState = await this.loadDuelFromDb(duelId);
+      if (!updatedState || !updatedState.questions.length) {
+        throw new Error('Failed to load generated questions');
+      }
+
+      // Update in-memory state
+      state.questions = updatedState.questions;
+      state.seed = updatedState.seed;
+      state.commitHash = updatedState.commitHash;
+
+      // Update status to ready
+      state.status = 'ready';
+      await prisma.duel.update({
+        where: { id: duelId },
+        data: { status: 'ready' },
+      });
+
+      console.log(`[DuelManager] ✅ Questions loaded, starting duel ${duelId}...`);
+
+      // Start the duel automatically
+      state.status = 'in_progress';
+      await prisma.duel.update({
+        where: { id: duelId },
+        data: { status: 'in_progress', startedAt: new Date() },
+      });
+
+      // Notify players
+      this.io.to(this.getRoomName(duelId)).emit('duel:starting', {
+        startsIn: COUNTDOWN_BEFORE_START,
+      });
+
+      console.log(`[DuelManager] ✅ Emitted duel:starting for duel ${duelId}, countdown: ${COUNTDOWN_BEFORE_START}s`);
+
+      // Start first question after countdown
+      setTimeout(() => {
+        console.log(`[DuelManager] Starting first question for duel ${duelId}`);
+        this.sendQuestion(state);
+      }, COUNTDOWN_BEFORE_START * 1000);
+    } catch (error) {
+      console.error(`[DuelManager] Failed to generate questions and start duel ${duelId}:`, error);
+      this.io.to(this.getRoomName(duelId)).emit('error', {
+        code: 'GENERATION_FAILED',
+        message: 'Failed to generate questions. Please try again.',
+      });
+    }
   }
 
   /**

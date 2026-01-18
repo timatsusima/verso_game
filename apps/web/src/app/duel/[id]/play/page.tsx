@@ -317,12 +317,17 @@ export default function PlayPage() {
 
   // Loading / Connection state
   if (!isConnected && !finalResult) {
+    // For matchmaking duels, show "Preparing match" instead of "Connecting"
+    const isMatchmaking = isRanked && status === 'pending';
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="text-center">
           <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
           <p className="text-tg-text-secondary">
-            {language === 'ru' ? 'Подключение...' : 'Connecting...'}
+            {isMatchmaking 
+              ? (language === 'ru' ? 'Подготовка матча...' : 'Preparing match...')
+              : (language === 'ru' ? 'Подключение...' : 'Connecting...')
+            }
           </p>
         </div>
       </div>

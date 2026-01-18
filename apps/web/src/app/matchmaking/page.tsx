@@ -84,10 +84,16 @@ export default function MatchmakingPage() {
         opponent: data.opponent,
       });
       
+      // Immediately join the duel via Socket.IO
+      if (socket && token) {
+        console.log('[Matchmaking] Emitting duel:join for duel', data.duelId);
+        socket.emit('duel:join', { duelId: data.duelId, token });
+      }
+      
       // Navigate to duel after short delay
       setTimeout(() => {
         router.push(`/duel/${data.duelId}/play`);
-      }, 2000);
+      }, 1000);
     };
 
     socket.on('connect', handleConnect);
@@ -105,14 +111,15 @@ export default function MatchmakingPage() {
     };
   }, [token, userId, router]);
 
-  // Cleanup on unmount
+  // Cleanup on unmount - only cancel if still searching (not if match found)
   useEffect(() => {
     return () => {
-      if (socketRef.current && isSearching) {
+      if (socketRef.current && isSearching && !matchFound) {
+        console.log('[Matchmaking] Component unmounting, cancelling search');
         socketRef.current.emit('mm:cancel');
       }
     };
-  }, [isSearching]);
+  }, [isSearching, matchFound]);
 
   const handleStartSearch = () => {
     if (!socketRef.current || !token) {
