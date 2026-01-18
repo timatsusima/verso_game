@@ -133,26 +133,26 @@ export default function PlayPage() {
         setIsCreatingRematch(false);
         addToast(
           language === 'ru' ? 'Соперник офлайн' : 'Opponent is offline',
-          'error'
+          'danger'
         );
       } else if (data.code === 'DUEL_NOT_FOUND' && isCreatingRematch) {
         setIsCreatingRematch(false);
         addToast(
           language === 'ru' ? 'Дуэль не найдена' : 'Duel not found',
-          'error'
+          'danger'
         );
       }
     };
 
-    socket.on('duel:rematchRequest', handleRematchRequest);
-    socket.on('duel:rematchAccepted', handleRematchAccepted);
-    socket.on('duel:rematchDeclined', handleRematchDeclined);
+    socket.on('duel:rematchRequest', handleRematchRequest as any);
+    socket.on('duel:rematchAccepted', handleRematchAccepted as any);
+    socket.on('duel:rematchDeclined', handleRematchDeclined as any);
     socket.on('error', handleError);
 
     return () => {
-      socket.off('duel:rematchRequest', handleRematchRequest);
-      socket.off('duel:rematchAccepted', handleRematchAccepted);
-      socket.off('duel:rematchDeclined', handleRematchDeclined);
+      socket.off('duel:rematchRequest', handleRematchRequest as any);
+      socket.off('duel:rematchAccepted', handleRematchAccepted as any);
+      socket.off('duel:rematchDeclined', handleRematchDeclined as any);
       socket.off('error', handleError);
     };
   }, [socket, router, language, addToast, isCreatingRematch]);

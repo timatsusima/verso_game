@@ -229,17 +229,17 @@ export function useSocket(duelId: string | null) {
       console.log('Player reconnected:', data);
     });
 
-    socket.on('duel:rematchRequest', (data) => {
+    socket.on('duel:rematchRequest', (data: { duelId: string; fromPlayerId: string; fromPlayerName: string }) => {
       console.log('Rematch request received:', data);
       // This will be handled in the component
     });
 
-    socket.on('duel:rematchAccepted', (data) => {
+    socket.on('duel:rematchAccepted', (data: { oldDuelId: string; newDuelId: string }) => {
       console.log('Rematch accepted:', data);
       // This will be handled in the component
     });
 
-    socket.on('duel:rematchDeclined', (data) => {
+    socket.on('duel:rematchDeclined', (data: { duelId: string; fromPlayerId: string }) => {
       console.log('Rematch declined:', data);
       // This will be handled in the component
     });
