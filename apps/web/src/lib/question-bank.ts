@@ -353,7 +353,7 @@ ${existingBlock}
   ]
 }
 
-Верни JSON объект с полем "questions" и "language": "ru"`:
+Верни JSON объект с полем "questions" и "language": "ru"`
     : `You are a quiz generator. Create UNIQUE questions that do NOT repeat existing ones.
 Difficulty: ${difficultyDescriptions.en[difficulty]}
 ${existingBlock}
