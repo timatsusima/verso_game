@@ -38,6 +38,15 @@ export interface ClientToServerEvents {
   
   // Matchmaking: cancel search
   'mm:cancel': () => void;
+  
+  // Rematch: request rematch
+  'duel:rematch': (data: { duelId: string }) => void;
+  
+  // Rematch: accept rematch request
+  'duel:rematchAccept': (data: { duelId: string }) => void;
+  
+  // Rematch: decline rematch request
+  'duel:rematchDecline': (data: { duelId: string }) => void;
 }
 
 // ============ Server -> Client Events ============
@@ -130,6 +139,25 @@ export interface ServerToClientEvents {
   'duel:playerReconnected': (data: {
     playerId: string;
     playerName: string;
+  }) => void;
+  
+  // Rematch: request received
+  'duel:rematchRequest': (data: {
+    duelId: string;
+    fromPlayerId: string;
+    fromPlayerName: string;
+  }) => void;
+  
+  // Rematch: accepted
+  'duel:rematchAccepted': (data: {
+    oldDuelId: string;
+    newDuelId: string;
+  }) => void;
+  
+  // Rematch: declined
+  'duel:rematchDeclined': (data: {
+    duelId: string;
+    fromPlayerId: string;
   }) => void;
   
   // Rating updated after match

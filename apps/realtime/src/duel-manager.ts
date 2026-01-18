@@ -909,4 +909,143 @@ export class DuelManager {
 
     this.duels.delete(duelId);
   }
+
+  /**
+   * Handle rematch request
+   */
+  async handleRematchRequest(socket: TypedSocket, duelId: string): Promise<void> {
+    const state = this.duels.get(duelId);
+    if (!state) {
+      socket.emit('error', { code: 'DUEL_NOT_FOUND', message: 'Duel not found' });
+      return;
+    }
+
+    const userId = socket.data.userId;
+    const userName = socket.data.username || 'Player';
+    const isCreator = state.creator.odId === userId;
+    const isOpponent = state.opponent?.odId === userId;
+
+    if (!isCreator && !isOpponent) {
+      socket.emit('error', { code: 'NOT_IN_DUEL', message: 'You are not part of this duel' });
+      return;
+    }
+
+    // Send rematch request to the other player
+    const otherPlayerSocket = isCreator ? state.opponent?.odSocket : state.creator.odSocket;
+    if (otherPlayerSocket) {
+      const otherSocket = this.io.sockets.sockets.get(otherPlayerSocket);
+      if (otherSocket) {
+        otherSocket.emit('duel:rematchRequest', {
+          duelId,
+          fromPlayerId: userId,
+          fromPlayerName: userName,
+        });
+        console.log(`[DuelManager] Rematch request sent from ${userName} to opponent`);
+      }
+    }
+  }
+
+  /**
+   * Handle rematch accept
+   */
+  async handleRematchAccept(socket: TypedSocket, duelId: string): Promise<void> {
+    const state = this.duels.get(duelId);
+    if (!state) {
+      socket.emit('error', { code: 'DUEL_NOT_FOUND', message: 'Duel not found' });
+      return;
+    }
+
+    const userId = socket.data.userId;
+    const isCreator = state.creator.odId === userId;
+    const isOpponent = state.opponent?.odId === userId;
+
+    if (!isCreator && !isOpponent) {
+      socket.emit('error', { code: 'NOT_IN_DUEL', message: 'You are not part of this duel' });
+      return;
+    }
+
+    // Get the other player's socket
+    const otherPlayerSocket = isCreator ? state.opponent?.odSocket : state.creator.odSocket;
+    const otherPlayerId = isCreator ? state.opponent?.odId : state.creator.odId;
+    
+    if (!otherPlayerSocket || !otherPlayerId) {
+      socket.emit('error', { code: 'OPPONENT_NOT_FOUND', message: 'Opponent not found' });
+      return;
+    }
+
+    // Create new duel via matchmaking manager (it has access to createMatch)
+    // For now, create directly
+    try {
+      const newDuel = await prisma.duel.create({
+        data: {
+          topic: state.topic,
+          questionsCount: state.questionsCount,
+          language: state.language,
+          difficulty: 'medium',
+          status: 'pending',
+          isRanked: true, // Rematch from ranked is also ranked
+          creatorId: state.creator.odId,
+          opponentId: otherPlayerId,
+        },
+      });
+
+      console.log(`[DuelManager] Created rematch duel ${newDuel.id} for ${duelId}`);
+
+      // Notify both players
+      const requesterSocket = this.io.sockets.sockets.get(isCreator ? state.creator.odSocket! : otherPlayerSocket);
+      const accepterSocket = this.io.sockets.sockets.get(otherPlayerSocket);
+
+      if (requesterSocket) {
+        requesterSocket.emit('duel:rematchAccepted', {
+          oldDuelId: duelId,
+          newDuelId: newDuel.id,
+        });
+      }
+
+      if (accepterSocket) {
+        accepterSocket.emit('duel:rematchAccepted', {
+          oldDuelId: duelId,
+          newDuelId: newDuel.id,
+        });
+      }
+
+      console.log(`[DuelManager] Rematch accepted, new duel: ${newDuel.id}`);
+    } catch (error) {
+      console.error('Failed to create rematch duel:', error);
+      socket.emit('error', { code: 'INTERNAL_ERROR', message: 'Failed to create rematch' });
+    }
+  }
+
+  /**
+   * Handle rematch decline
+   */
+  async handleRematchDecline(socket: TypedSocket, duelId: string): Promise<void> {
+    const state = this.duels.get(duelId);
+    if (!state) {
+      socket.emit('error', { code: 'DUEL_NOT_FOUND', message: 'Duel not found' });
+      return;
+    }
+
+    const userId = socket.data.userId;
+    const isCreator = state.creator.odId === userId;
+    const isOpponent = state.opponent?.odId === userId;
+
+    if (!isCreator && !isOpponent) {
+      socket.emit('error', { code: 'NOT_IN_DUEL', message: 'You are not part of this duel' });
+      return;
+    }
+
+    // Notify the requester
+    const requesterSocketId = isCreator ? state.opponent?.odSocket : state.creator.odSocket;
+    if (requesterSocketId) {
+      const requesterSocket = this.io.sockets.sockets.get(requesterSocketId);
+      if (requesterSocket) {
+        requesterSocket.emit('duel:rematchDeclined', {
+          duelId,
+          fromPlayerId: userId,
+        });
+        console.log(`[DuelManager] Rematch declined by ${userId}`);
+      }
+    }
+  }
 }

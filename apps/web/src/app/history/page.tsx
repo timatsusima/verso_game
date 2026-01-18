@@ -145,8 +145,16 @@ export default function HistoryPage() {
   return (
     <div className="flex-1 flex flex-col p-6">
       {/* Header */}
-      <div className="text-center mb-6">
-        <h1 className="text-3xl font-bold mb-2">📜 {t_h.title}</h1>
+      <div className="flex items-center justify-between mb-6">
+        <Button
+          variant="ghost"
+          onClick={() => router.push('/')}
+          className="text-tg-text-secondary"
+        >
+          ← {language === 'ru' ? 'Назад' : 'Back'}
+        </Button>
+        <h1 className="text-3xl font-bold">📜 {t_h.title}</h1>
+        <div className="w-16" /> {/* Spacer for centering */}
       </div>
 
       {/* Filters */}

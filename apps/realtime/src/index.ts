@@ -179,6 +179,51 @@ io.on('connection', async (socket) => {
     }
   });
 
+  // Handle rematch request
+  socket.on('duel:rematch', async ({ duelId }) => {
+    try {
+      if (!socket.data.userId) {
+        socket.emit('error', { code: 'UNAUTHORIZED', message: 'Not authenticated' });
+        return;
+      }
+
+      await duelManager.handleRematchRequest(socket, duelId);
+    } catch (error) {
+      console.error('Rematch request error:', error);
+      socket.emit('error', { code: 'INTERNAL_ERROR', message: 'Failed to request rematch' });
+    }
+  });
+
+  // Handle rematch accept
+  socket.on('duel:rematchAccept', async ({ duelId }) => {
+    try {
+      if (!socket.data.userId) {
+        socket.emit('error', { code: 'UNAUTHORIZED', message: 'Not authenticated' });
+        return;
+      }
+
+      await duelManager.handleRematchAccept(socket, duelId);
+    } catch (error) {
+      console.error('Rematch accept error:', error);
+      socket.emit('error', { code: 'INTERNAL_ERROR', message: 'Failed to accept rematch' });
+    }
+  });
+
+  // Handle rematch decline
+  socket.on('duel:rematchDecline', async ({ duelId }) => {
+    try {
+      if (!socket.data.userId) {
+        socket.emit('error', { code: 'UNAUTHORIZED', message: 'Not authenticated' });
+        return;
+      }
+
+      await duelManager.handleRematchDecline(socket, duelId);
+    } catch (error) {
+      console.error('Rematch decline error:', error);
+      socket.emit('error', { code: 'INTERNAL_ERROR', message: 'Failed to decline rematch' });
+    }
+  });
+
   // Handle disconnect
   socket.on('disconnect', () => {
     console.log(`Client disconnected: ${socket.id}`);

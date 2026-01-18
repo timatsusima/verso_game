@@ -146,7 +146,7 @@ export function useSocket(duelId: string | null) {
       setCurrentQuestion(data.question, data.totalQuestions);
       setStatus('in_progress'); // Ensure status is in_progress when question arrives
       setConnected(true); // Ensure connected when question arrives
-      // Note: player names should already be set from duel:joined, but we can refresh state if needed
+      // Note: player names should already be set from duel:joined, but state will be updated via duel:state if needed
     });
 
     socket.on('duel:tick', (data) => {
@@ -229,6 +229,21 @@ export function useSocket(duelId: string | null) {
       console.log('Player reconnected:', data);
     });
 
+    socket.on('duel:rematchRequest', (data) => {
+      console.log('Rematch request received:', data);
+      // This will be handled in the component
+    });
+
+    socket.on('duel:rematchAccepted', (data) => {
+      console.log('Rematch accepted:', data);
+      // This will be handled in the component
+    });
+
+    socket.on('duel:rematchDeclined', (data) => {
+      console.log('Rematch declined:', data);
+      // This will be handled in the component
+    });
+
     return () => {
       hasJoined.current = false;
       socket.off('connect');
@@ -265,6 +280,27 @@ export function useSocket(duelId: string | null) {
     }
   }, [duelId]);
 
+  const requestRematch = useCallback(() => {
+    const socket = getSocket();
+    if (socket.connected && duelId) {
+      socket.emit('duel:rematch', { duelId });
+    }
+  }, [duelId]);
+
+  const acceptRematch = useCallback(() => {
+    const socket = getSocket();
+    if (socket.connected && duelId) {
+      socket.emit('duel:rematchAccept', { duelId });
+    }
+  }, [duelId]);
+
+  const declineRematch = useCallback(() => {
+    const socket = getSocket();
+    if (socket.connected && duelId) {
+      socket.emit('duel:rematchDecline', { duelId });
+    }
+  }, [duelId]);
+
   const syncState = useCallback(() => {
     const socket = getSocket();
     if (socket.connected && duelId) {
@@ -280,5 +316,8 @@ export function useSocket(duelId: string | null) {
     submitAnswer,
     startDuel,
     syncState,
+    requestRematch,
+    acceptRematch,
+    declineRematch,
   };
 }

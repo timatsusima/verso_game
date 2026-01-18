@@ -78,7 +78,7 @@ export default function PlayPage() {
   } = useDuelStore();
 
   const duelId = params.id as string;
-  const { submitAnswer, startDuel, socket } = useSocket(duelId);
+  const { submitAnswer, startDuel, socket, requestRematch, acceptRematch, declineRematch } = useSocket(duelId);
   
   // UI State
   const [showResult, setShowResult] = useState(false);
@@ -86,6 +86,7 @@ export default function PlayPage() {
   const [showRematchOptions, setShowRematchOptions] = useState(false);
   const [isCreatingRematch, setIsCreatingRematch] = useState(false);
   const [isRematchComplete, setIsRematchComplete] = useState(false);
+  const [rematchRequest, setRematchRequest] = useState<{ fromPlayerId: string; fromPlayerName: string } | null>(null);
   
   // Duel PvP State
   const [myStatus, setMyStatus] = useState<PlayerStatus>('thinking');
@@ -103,6 +104,41 @@ export default function PlayPage() {
   const { toasts, addToast, removeToast, clearToasts } = useDuelToasts();
 
   const isCreator = creator?.id === userId;
+
+  // Handle rematch events
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleRematchRequest = (data: { fromPlayerId: string; fromPlayerName: string }) => {
+      console.log('Rematch request received:', data);
+      setRematchRequest({ fromPlayerId: data.fromPlayerId, fromPlayerName: data.fromPlayerName });
+    };
+
+    const handleRematchAccepted = (data: { oldDuelId: string; newDuelId: string }) => {
+      console.log('Rematch accepted, redirecting to:', data.newDuelId);
+      router.push(`/duel/${data.newDuelId}/play`);
+    };
+
+    const handleRematchDeclined = () => {
+      console.log('Rematch declined');
+      setRematchRequest(null);
+      addToast({
+        id: 'rematch-declined',
+        message: language === 'ru' ? 'Соперник отклонил реванш' : 'Opponent declined rematch',
+        type: 'info',
+      });
+    };
+
+    socket.on('duel:rematchRequest', handleRematchRequest);
+    socket.on('duel:rematchAccepted', handleRematchAccepted);
+    socket.on('duel:rematchDeclined', handleRematchDeclined);
+
+    return () => {
+      socket.off('duel:rematchRequest', handleRematchRequest);
+      socket.off('duel:rematchAccepted', handleRematchAccepted);
+      socket.off('duel:rematchDeclined', handleRematchDeclined);
+    };
+  }, [socket, router, language, addToast]);
 
   // Reset state when question changes
   useEffect(() => {
@@ -264,6 +300,14 @@ export default function PlayPage() {
     // Prevent double clicks
     if (isCreatingRematch) return;
 
+    // For ranked/matchmaking duels, use Socket.IO rematch
+    if (isRanked) {
+      requestRematch();
+      setIsCreatingRematch(true);
+      return;
+    }
+
+    // For invite duels, create new duel via API
     // Instant feedback: vibrate and set loading state
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
       navigator.vibrate(10);
@@ -407,6 +451,44 @@ export default function PlayPage() {
 
     return (
       <>
+        {/* Rematch Request Dialog */}
+        {rematchRequest && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <Card variant="glass" className="max-w-sm w-full p-6">
+              <h3 className="text-xl font-bold mb-4 text-center">
+                {language === 'ru' ? 'Запрос на реванш' : 'Rematch Request'}
+              </h3>
+              <p className="text-tg-text-secondary mb-6 text-center">
+                {language === 'ru' 
+                  ? `${rematchRequest.fromPlayerName} предлагает реванш`
+                  : `${rematchRequest.fromPlayerName} wants a rematch`}
+              </p>
+              <div className="flex gap-3">
+                <Button
+                  fullWidth
+                  variant="secondary"
+                  onClick={() => {
+                    declineRematch();
+                    setRematchRequest(null);
+                  }}
+                >
+                  {language === 'ru' ? 'Отклонить' : 'Decline'}
+                </Button>
+                <Button
+                  fullWidth
+                  onClick={() => {
+                    acceptRematch();
+                    setRematchRequest(null);
+                    setIsCreatingRematch(true);
+                  }}
+                >
+                  {language === 'ru' ? 'Принять' : 'Accept'}
+                </Button>
+              </div>
+            </Card>
+          </div>
+        )}
+
         {/* Rematch Loading Overlay */}
         <DuelLoadingOverlay
           isLoading={isCreatingRematch}
