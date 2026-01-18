@@ -44,14 +44,14 @@ export function useSocket(duelId: string | null) {
 
     const creator = {
       id: state.players.creator.odId,
-      name: state.players.creator.odName,
+      name: state.players.creator.displayName || state.players.creator.odName,
       score: state.players.creator.score,
       hasAnswered: state.players.creator.hasAnswered,
     };
 
     const opponent = state.players.opponent ? {
       id: state.players.opponent.odId,
-      name: state.players.opponent.odName,
+      name: state.players.opponent.displayName || state.players.opponent.odName,
       score: state.players.opponent.score,
       hasAnswered: state.players.opponent.hasAnswered,
     } : null;
@@ -155,6 +155,16 @@ export function useSocket(duelId: string | null) {
     socket.on('duel:finished', (result: DuelResult) => {
       console.log('Duel finished:', result);
       setFinalResult(result);
+      // Update isRanked from result
+      if (result.isRanked !== undefined) {
+        setDuelInfo({
+          duelId: result.duelId,
+          topic: '', // Will be updated from state
+          questionsCount: 10,
+          status: 'finished',
+          isRanked: result.isRanked,
+        });
+      }
     });
 
     socket.on('duel:state', (state: DuelGameState) => {

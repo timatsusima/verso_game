@@ -65,6 +65,7 @@ interface DuelState {
   setOpponentAnswered: (answered: boolean) => void;
   addQuestionResult: (result: QuestionResult) => void;
   setFinalResult: (result: DuelResult) => void;
+  setIsRanked: (isRanked: boolean) => void;
   setStatus: (status: DuelStatus) => void;
   updatePlayerScore: (playerId: string, score: number) => void;
   setConnected: (connected: boolean) => void;
@@ -140,7 +141,13 @@ export const useDuelStore = create<DuelState>((set) => ({
       questionResults: [...state.questionResults, result],
     })),
 
-  setFinalResult: (result) => set({ finalResult: result, status: 'finished' }),
+  setFinalResult: (result) => set({ 
+    finalResult: result, 
+    status: 'finished',
+    isRanked: result.isRanked ?? false,
+  }),
+  
+  setIsRanked: (isRanked) => set({ isRanked }),
 
   setStatus: (status) => set({ status }),
 

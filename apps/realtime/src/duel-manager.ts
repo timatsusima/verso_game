@@ -62,6 +62,14 @@ export class DuelManager {
   }
 
   /**
+   * Get display name for a user
+   * Priority: firstName || username || "Player N"
+   */
+  private getDisplayName(user: { firstName: string; username: string | null }, index: number = 1): string {
+    return user.firstName || user.username || `Player ${index}`;
+  }
+
+  /**
    * Get room name for a duel
    */
   private getRoomName(duelId: string): string {
@@ -76,8 +84,20 @@ export class DuelManager {
       where: { id: duelId },
       include: {
         pack: true,
-        creator: true,
-        opponent: true,
+        creator: {
+          select: {
+            id: true,
+            firstName: true,
+            username: true,
+          },
+        },
+        opponent: {
+          select: {
+            id: true,
+            firstName: true,
+            username: true,
+          },
+        },
       },
     });
 
@@ -101,14 +121,14 @@ export class DuelManager {
       
       creator: {
         odId: duel.creatorId,
-        odName: duel.creator.firstName,
+        odName: this.getDisplayName(duel.creator, 1),
         odSocket: null,
         score: 0,
         answers: new Map(),
       },
       opponent: duel.opponent ? {
         odId: duel.opponentId!,
-        odName: duel.opponent.firstName,
+        odName: this.getDisplayName(duel.opponent, 2),
         odSocket: null,
         score: 0,
         answers: new Map(),
@@ -170,6 +190,7 @@ export class DuelManager {
         creator: {
           odId: state.creator.odId,
           odName: state.creator.odName,
+          displayName: state.creator.odName, // odName already contains displayName
           score: state.creator.score,
           currentAnswer: null,
           hasAnswered: state.creator.answers.has(state.currentQuestionIndex),
@@ -177,6 +198,7 @@ export class DuelManager {
         opponent: state.opponent ? {
           odId: state.opponent.odId,
           odName: state.opponent.odName,
+          displayName: state.opponent.odName, // odName already contains displayName
           score: state.opponent.score,
           currentAnswer: null,
           hasAnswered: state.opponent.answers.has(state.currentQuestionIndex),
@@ -698,6 +720,12 @@ export class DuelManager {
   private async finishDuel(state: DuelState) {
     state.status = 'finished';
 
+    // Get duel from DB to check isRanked
+    const duel = await prisma.duel.findUnique({
+      where: { id: state.duelId },
+      select: { isRanked: true },
+    });
+
     // Determine winner
     let winnerId: string | null = null;
     if (state.creator.score > (state.opponent?.score ?? 0)) {
@@ -755,6 +783,7 @@ export class DuelManager {
       winnerId,
       seed: state.seed,
       results,
+      isRanked: duel?.isRanked ?? false,
     };
 
     // Send final result

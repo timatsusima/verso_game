@@ -369,6 +369,18 @@ function HomePageContent() {
           >
             👥 {language === 'ru' ? 'Дуэль с другом' : 'Duel with Friend'}
           </Button>
+
+          {isAuthenticated && (
+            <Button
+              fullWidth
+              size="lg"
+              variant="ghost"
+              onClick={() => router.push('/history')}
+              className="h-14 text-base"
+            >
+              📜 {language === 'ru' ? 'История дуэлей' : 'Duel History'}
+            </Button>
+          )}
         </div>
       )}
 

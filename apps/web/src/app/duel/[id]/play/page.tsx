@@ -318,17 +318,31 @@ export default function PlayPage() {
   // Loading / Connection state
   // Show loading if not connected OR if status is pending (matchmaking, generating questions)
   if ((!isConnected || status === 'pending') && !finalResult) {
-    // For matchmaking duels, show "Preparing match" instead of "Connecting"
+    // For matchmaking duels, use DuelLoadingOverlay with proper states
     const isMatchmaking = isRanked && (status === 'pending' || !isConnected);
+    
+    if (isMatchmaking) {
+      return (
+        <DuelLoadingOverlay
+          isLoading={true}
+          isComplete={false}
+          language={language}
+          topic={topic || undefined}
+          mode="start"
+          playerNames={opponent ? {
+            you: firstName || 'You',
+            opponent: opponent.name,
+          } : undefined}
+        />
+      );
+    }
+    
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="text-center">
           <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
           <p className="text-tg-text-secondary">
-            {isMatchmaking 
-              ? (language === 'ru' ? 'Подготовка матча...' : 'Preparing match...')
-              : (language === 'ru' ? 'Подключение...' : 'Connecting...')
-            }
+            {language === 'ru' ? 'Подключение...' : 'Connecting...'}
           </p>
         </div>
       </div>
@@ -413,9 +427,13 @@ export default function PlayPage() {
           language={language}
           onRematch={() => handleRematch(true)}
           onNewTopic={() => router.push('/')}
+          onBackToMenu={() => {
+            reset();
+            router.push('/');
+          }}
           isLoadingRematch={isCreatingRematch}
           rating={ratingData || undefined}
-          isRanked={isRanked}
+          isRanked={isRanked || finalResult?.isRanked || false}
         />
       </>
     );

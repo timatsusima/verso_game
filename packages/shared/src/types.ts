@@ -79,6 +79,7 @@ export interface DuelAnswer {
 export interface PlayerScore {
   odId: string;
   odName: string;
+  displayName: string; // Guaranteed display name: firstName || username || "Player N"
   score: number;
   currentAnswer: number | null; // Current question answer
   hasAnswered: boolean;
@@ -161,4 +162,5 @@ export interface DuelResult {
   winnerId: string | null; // null = draw
   seed: string;
   results: QuestionResult[];
+  isRanked?: boolean; // Whether this duel affects rating
 }

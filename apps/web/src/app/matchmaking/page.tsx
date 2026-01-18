@@ -15,6 +15,7 @@ const TRANSLATIONS = {
     title: 'Поиск соперника',
     startSearch: 'Найти соперника',
     searching: 'Ищем соперника…',
+    idleNote: 'Нажми "Найти соперника", чтобы начать поиск.',
     searchingNote: 'Ищем игрока с похожим рейтингом',
     srRange: 'Диапазон SR',
     cancel: 'Отмена',
@@ -26,6 +27,7 @@ const TRANSLATIONS = {
     title: 'Finding Opponent',
     startSearch: 'Find Opponent',
     searching: 'Searching for opponent…',
+    idleNote: 'Press "Find Opponent" to start searching.',
     searchingNote: 'Looking for player with similar rating',
     srRange: 'SR Range',
     cancel: 'Cancel',
@@ -188,7 +190,7 @@ export default function MatchmakingPage() {
           <>
             <div className="text-6xl mb-6">🎯</div>
             <p className="text-lg text-tg-text-secondary mb-8 text-center">
-              {t_mm.searchingNote}
+              {t_mm.idleNote}
             </p>
             <Button
               fullWidth
@@ -211,8 +213,11 @@ export default function MatchmakingPage() {
           <>
             <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-6" />
             <p className="text-xl font-bold mb-2">{t_mm.searching}</p>
+            <p className="text-sm text-tg-text-secondary mb-2">
+              {t_mm.searchingNote}
+            </p>
             {srRange && (
-              <p className="text-sm text-tg-text-secondary mb-6">
+              <p className="text-sm text-tg-hint mb-6">
                 {t_mm.srRange}: {srRange.min} - {srRange.max}
               </p>
             )}
