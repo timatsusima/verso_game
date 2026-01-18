@@ -225,6 +225,63 @@ async function markQuestionsAsServed(questionIds: string[]): Promise<void> {
   });
 }
 
+// ============ Language Detection ============
+
+/**
+ * Detect if text is primarily in Russian or English
+ * Returns 'ru' if text contains Cyrillic characters, 'en' otherwise
+ */
+function detectLanguage(text: string): 'ru' | 'en' {
+  // Check for Cyrillic characters (Russian)
+  const cyrillicPattern = /[\u0400-\u04FF]/;
+  const hasCyrillic = cyrillicPattern.test(text);
+  
+  // If text has Cyrillic, it's Russian
+  if (hasCyrillic) {
+    return 'ru';
+  }
+  
+  // Check for Latin characters (English)
+  const latinPattern = /[a-zA-Z]/;
+  const hasLatin = latinPattern.test(text);
+  
+  // If has Latin but no Cyrillic, it's English
+  if (hasLatin) {
+    return 'en';
+  }
+  
+  // Default to English if no clear indicators (numbers, symbols, etc.)
+  return 'en';
+}
+
+/**
+ * Validate that all texts (question + all options) are in the expected language
+ */
+function validateLanguage(
+  questionText: string,
+  options: string[],
+  expectedLanguage: Language
+): boolean {
+  const questionLang = detectLanguage(questionText);
+  
+  if (questionLang !== expectedLanguage) {
+    console.log(`[LANGUAGE_MISMATCH] Question language mismatch: expected ${expectedLanguage}, got ${questionLang}`);
+    console.log(`[LANGUAGE_MISMATCH] Question text: "${questionText.substring(0, 100)}"`);
+    return false;
+  }
+  
+  for (let i = 0; i < options.length; i++) {
+    const optionLang = detectLanguage(options[i]);
+    if (optionLang !== expectedLanguage) {
+      console.log(`[LANGUAGE_MISMATCH] Option ${i} language mismatch: expected ${expectedLanguage}, got ${optionLang}`);
+      console.log(`[LANGUAGE_MISMATCH] Option text: "${options[i]}"`);
+      return false;
+    }
+  }
+  
+  return true;
+}
+
 // ============ OpenAI Integration ============
 
 import OpenAI from 'openai';
@@ -270,31 +327,74 @@ async function generateMissingQuestions(
     ? `Ты генератор викторины. Создавай УНИКАЛЬНЫЕ вопросы, которые НЕ повторяют существующие.
 Сложность: ${difficultyDescriptions.ru[difficulty]}
 ${existingBlock}
+КРИТИЧЕСКИ ВАЖНО - ЯЗЫК:
+⚠️ ВСЕ тексты (вопрос И ВСЕ 4 варианта ответа) ДОЛЖНЫ быть СТРОГО на русском языке.
+⚠️ ЗАПРЕЩЕНО смешивать языки. Если тема на английском (например, "Hollywood movies"), 
+   ВСЕ РАВНО вопрос и ответы должны быть на русском языке.
+⚠️ НЕ используй английские названия в ответах, если не указано иное.
+
 ПРАВИЛА:
 1. Каждый вопрос должен иметь ровно 4 варианта ответа
 2. Только один вариант правильный
 3. НЕ повторяй и НЕ перефразируй существующие вопросы
 4. Ищи менее очевидные факты
 5. Все вопросы должны быть фактически корректными
+6. ВСЕ тексты (вопрос + все 4 ответа) СТРОГО на русском языке
 
-Верни JSON объект с полем "questions":
-{"questions": [{"text": "Вопрос?", "options": ["A", "B", "C", "D"], "correctIndex": 0}]}`
+ФОРМАТ ОТВЕТА (строго JSON):
+{
+  "language": "ru",
+  "questions": [
+    {
+      "text": "Текст вопроса на русском?",
+      "options": ["Вариант A на русском", "Вариант B на русском", "Вариант C на русском", "Вариант D на русском"],
+      "correctIndex": 0
+    }
+  ]
+}
+
+Верни JSON объект с полем "questions" и "language": "ru"`:
     : `You are a quiz generator. Create UNIQUE questions that do NOT repeat existing ones.
 Difficulty: ${difficultyDescriptions.en[difficulty]}
 ${existingBlock}
+CRITICALLY IMPORTANT - LANGUAGE:
+⚠️ ALL text (question AND ALL 4 answer options) MUST be STRICTLY in English.
+⚠️ MIXING languages is FORBIDDEN. Even if the topic is in another language, 
+   the question and ALL answers MUST be in English.
+⚠️ DO NOT use non-English text in answers unless explicitly required.
+
 RULES:
 1. Each question must have exactly 4 answer options
 2. Only one option is correct
 3. Do NOT duplicate or paraphrase existing questions
 4. Focus on less obvious facts
 5. All questions must be factually correct
+6. ALL text (question + all 4 answers) STRICTLY in English
 
-Return JSON object with "questions" field:
-{"questions": [{"text": "Question?", "options": ["A", "B", "C", "D"], "correctIndex": 0}]}`;
+RESPONSE FORMAT (strict JSON):
+{
+  "language": "en",
+  "questions": [
+    {
+      "text": "Question text in English?",
+      "options": ["Option A in English", "Option B in English", "Option C in English", "Option D in English"],
+      "correctIndex": 0
+    }
+  ]
+}
+
+Return JSON object with "questions" field and "language": "en"`;
 
   const userPrompt = language === 'ru'
-    ? `Создай ровно ${count} уникальных вопросов на тему: "${topic}"`
-    : `Create exactly ${count} unique questions on topic: "${topic}"`;
+    ? `Создай ровно ${count} уникальных вопросов на тему: "${topic}"
+
+⚠️ ВАЖНО: ВСЕ тексты (вопрос и ВСЕ 4 варианта ответа) должны быть СТРОГО на русском языке.
+Даже если тема содержит английские названия (например, "Hollywood movies"), 
+вопрос и ответы должны быть на русском.`
+    : `Create exactly ${count} unique questions on topic: "${topic}"
+
+⚠️ IMPORTANT: ALL text (question and ALL 4 answer options) MUST be STRICTLY in English.
+Even if the topic contains non-English names, the question and answers must be in English.`;
 
   console.log(`[QuestionBank] Generating ${count} new questions for "${topic}" (${language}/${difficulty})`);
 
