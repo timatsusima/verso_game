@@ -318,9 +318,10 @@ export default function PlayPage() {
   // Loading / Connection state
   // Show loading if not connected OR if status is pending (matchmaking, generating questions)
   if ((!isConnected || status === 'pending') && !finalResult) {
-    // For matchmaking duels, use DuelLoadingOverlay with proper states
-    // Check if it's a matchmaking duel: isRanked OR status is pending (matchmaking creates duels with pending status)
-    const isMatchmaking = (isRanked || status === 'pending') && (status === 'pending' || !isConnected);
+    // For matchmaking duels or any pending duels, use DuelLoadingOverlay with proper states
+    // Matchmaking duels have status 'pending' or isRanked=true
+    // Also show for any duel that's not connected yet (initial load)
+    const isMatchmaking = isRanked || status === 'pending' || (!isConnected && status === null);
     
     if (isMatchmaking) {
       return (
