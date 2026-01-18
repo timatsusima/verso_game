@@ -314,13 +314,19 @@ export class DuelManager {
         throw new Error('Failed to load generated questions');
       }
 
-      // Update in-memory state
-      state.questions = updatedState.questions;
-      state.seed = updatedState.seed;
-      state.commitHash = updatedState.commitHash;
+      // CRITICAL: Get state from cache (not the parameter) to ensure we update the cached version
+      const cachedState = this.duels.get(duelId);
+      if (!cachedState) {
+        throw new Error('Duel state lost from cache');
+      }
+
+      // Update cached state with questions
+      cachedState.questions = updatedState.questions;
+      cachedState.seed = updatedState.seed;
+      cachedState.commitHash = updatedState.commitHash;
 
       // Update status to ready
-      state.status = 'ready';
+      cachedState.status = 'ready';
       await prisma.duel.update({
         where: { id: duelId },
         data: { status: 'ready' },
@@ -329,14 +335,16 @@ export class DuelManager {
       console.log(`[DuelManager] ✅ Questions loaded, starting duel ${duelId}...`);
 
       // Start the duel automatically
-      state.status = 'in_progress';
+      cachedState.status = 'in_progress';
       await prisma.duel.update({
         where: { id: duelId },
         data: { status: 'in_progress', startedAt: new Date() },
       });
 
-      // Notify players
-      this.io.to(this.getRoomName(duelId)).emit('duel:starting', {
+      // Notify players in room
+      const roomName = this.getRoomName(duelId);
+      console.log(`[DuelManager] Emitting duel:starting to room ${roomName}`);
+      this.io.to(roomName).emit('duel:starting', {
         startsIn: COUNTDOWN_BEFORE_START,
       });
 
@@ -345,7 +353,8 @@ export class DuelManager {
       // Start first question after countdown
       setTimeout(() => {
         console.log(`[DuelManager] Starting first question for duel ${duelId}`);
-        this.sendQuestion(state);
+        // Use cached state, not parameter
+        this.sendQuestion(cachedState);
       }, COUNTDOWN_BEFORE_START * 1000);
     } catch (error) {
       console.error(`[DuelManager] Failed to generate questions and start duel ${duelId}:`, error);
