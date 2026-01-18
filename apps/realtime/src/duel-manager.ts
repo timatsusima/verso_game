@@ -321,6 +321,30 @@ export class DuelManager {
       });
     }
 
+    // If both players joined, send updated state to both players
+    // This ensures the first player gets the opponent info when the second player joins
+    if (bothJoined) {
+      const updatedGameState = this.buildGameState(currentState);
+      console.log(`[DuelManager] Both players joined, sending updated state to both players`);
+      
+      // Send updated state to both players
+      if (currentState.creator.odSocket) {
+        const creatorSocket = this.io.sockets.sockets.get(currentState.creator.odSocket);
+        if (creatorSocket) {
+          creatorSocket.emit('duel:state', updatedGameState);
+          console.log(`[DuelManager] ✅ Sent updated state to creator`);
+        }
+      }
+      
+      if (currentState.opponent?.odSocket) {
+        const opponentSocket = this.io.sockets.sockets.get(currentState.opponent.odSocket);
+        if (opponentSocket) {
+          opponentSocket.emit('duel:state', updatedGameState);
+          console.log(`[DuelManager] ✅ Sent updated state to opponent`);
+        }
+      }
+    }
+
     // For matchmaking duels: if both joined and no pack exists, generate questions and start
     if (bothJoined && currentState.status === 'pending' && currentState.questions.length === 0) {
       console.log(`[DuelManager] Both players joined matchmaking duel ${duelId}, generating questions...`);
@@ -470,6 +494,14 @@ export class DuelManager {
     // Send sanitized question (without correct answer)
     const roomName = this.getRoomName(state.duelId);
     console.log(`[DuelManager] Emitting duel:question to room ${roomName} for question ${state.currentQuestionIndex + 1}`);
+    
+    // For the first question, also send full game state to ensure both players have opponent info
+    if (state.currentQuestionIndex === 0) {
+      const gameState = this.buildGameState(state);
+      console.log(`[DuelManager] Sending full game state with first question to ensure both players have opponent info`);
+      this.io.to(roomName).emit('duel:state', gameState);
+    }
+    
     this.io.to(roomName).emit('duel:question', {
       question: {
         id: question.id,
