@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores/auth-store';
 import { useTranslations } from '@/hooks/use-translations';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { SegmentedControl, type SegmentedControlOption } from '@/components/ui/segmented-control';
 import { cn } from '@/lib/utils';
 
 interface HistoryEntry {
@@ -142,49 +143,39 @@ export default function HistoryPage() {
     );
   }
 
+  const filterOptions: SegmentedControlOption<Filter>[] = [
+    { value: 'all', label: t_h.all },
+    { value: 'ranked', label: t_h.ranked },
+    { value: 'friends', label: t_h.friends },
+  ];
+
   return (
-    <div className="flex-1 flex flex-col p-6">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <Button
-          variant="ghost"
+    <div className="flex-1 flex flex-col">
+      {/* Level A: Navigation + Header */}
+      <div className="flex items-center gap-3 px-6 pt-4 pb-3">
+        <button
           onClick={() => router.push('/')}
-          className="text-tg-text-secondary"
+          className="text-tg-text-secondary hover:text-tg-text transition-colors p-1 -ml-1"
+          aria-label={language === 'ru' ? 'Назад' : 'Back'}
         >
-          ← {language === 'ru' ? 'Назад' : 'Back'}
-        </Button>
-        <h1 className="text-3xl font-bold">📜 {t_h.title}</h1>
-        <div className="w-16" /> {/* Spacer for centering */}
+          <span className="text-2xl">←</span>
+        </button>
+        <h1 className="text-xl font-bold flex-1">{t_h.title}</h1>
       </div>
 
-      {/* Filters */}
-      <div className="flex gap-2 mb-6">
-        <Button
-          variant={filter === 'all' ? 'primary' : 'secondary'}
-          onClick={() => setFilter('all')}
-          className="flex-1"
-        >
-          {t_h.all}
-        </Button>
-        <Button
-          variant={filter === 'ranked' ? 'primary' : 'secondary'}
-          onClick={() => setFilter('ranked')}
-          className="flex-1"
-        >
-          {t_h.ranked}
-        </Button>
-        <Button
-          variant={filter === 'friends' ? 'primary' : 'secondary'}
-          onClick={() => setFilter('friends')}
-          className="flex-1"
-        >
-          {t_h.friends}
-        </Button>
+      {/* Level B: Segmented Control */}
+      <div className="px-6 pb-4">
+        <SegmentedControl
+          options={filterOptions}
+          value={filter}
+          onChange={setFilter}
+        />
       </div>
 
       {/* History List */}
+      <div className="flex-1 overflow-y-auto px-6">
       {isLoading ? (
-        <Card variant="bordered" className="flex-1 flex items-center justify-center p-8">
+        <Card variant="bordered" className="flex-1 flex items-center justify-center p-8 min-h-[400px]">
           <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
         </Card>
       ) : error ? (
@@ -273,16 +264,6 @@ export default function HistoryPage() {
           ))}
         </div>
       )}
-
-      {/* Back Button */}
-      <div className="mt-4">
-        <Button
-          fullWidth
-          variant="ghost"
-          onClick={() => router.push('/')}
-        >
-          {t_h.backToMenu}
-        </Button>
       </div>
     </div>
   );
