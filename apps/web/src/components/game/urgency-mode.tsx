@@ -38,10 +38,11 @@ export function UrgencyBanner({ isActive, timeRemaining, language }: UrgencyBann
   return (
     <div
       className={cn(
-        'w-full py-3 px-4 rounded-xl mb-4',
+        'w-full max-w-md mx-auto py-3 px-4 rounded-xl',
         'flex items-center justify-center gap-3',
         'transition-all duration-300',
         'animate-urgency-slide-in',
+        'pointer-events-none',
         isCritical 
           ? 'bg-gradient-to-r from-red-600/30 to-red-500/30 border border-red-500/50' 
           : 'bg-gradient-to-r from-orange-600/25 to-amber-500/25 border border-orange-500/40'

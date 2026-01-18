@@ -598,13 +598,24 @@ export default function PlayPage() {
   // Game in progress
   return (
     <div className={cn(
-      'flex-1 flex flex-col p-4 transition-all duration-300'
+      'flex-1 flex flex-col p-4 transition-all duration-300 relative'
     )}>
       {/* Urgency mode effects */}
       <UrgencyVignette isActive={isUrgencyMode && !hasAnswered} />
       
       {/* Toasts */}
       <DuelToasts toasts={toasts} onRemove={removeToast} />
+
+      {/* Urgency banner overlay - absolutely positioned, doesn't affect layout */}
+      {isUrgencyMode && !hasAnswered && (
+        <div className="absolute left-0 right-0 top-[280px] z-50 flex flex-col items-center gap-2 pointer-events-none px-4">
+          <UrgencyBanner
+            isActive={isUrgencyMode && !hasAnswered}
+            timeRemaining={displayTime}
+            language={language}
+          />
+        </div>
+      )}
 
       {/* Duel Header with PvP indicators */}
       <DuelHeader
@@ -643,15 +654,6 @@ export default function PlayPage() {
           isUrgencyMode={isUrgencyMode && !hasAnswered}
         />
       </div>
-
-      {/* Urgency banner - non-blocking indicator */}
-      {isUrgencyMode && !hasAnswered && (
-        <UrgencyBanner
-          isActive={isUrgencyMode && !hasAnswered}
-          timeRemaining={displayTime}
-          language={language}
-        />
-      )}
 
       {/* Question */}
       {currentQuestion && (
