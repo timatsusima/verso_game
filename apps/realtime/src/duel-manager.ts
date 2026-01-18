@@ -192,14 +192,23 @@ export class DuelManager {
    * Join a duel
    */
   async joinDuel(socket: TypedSocket, duelId: string, userId: string, userName: string) {
-    console.log(`[DuelManager] duel:join received from ${userName} (${userId}) for duel ${duelId}`);
+    console.log(`[DuelManager] duel:join received from ${userName} (${userId}) for duel ${duelId}, socket: ${socket.id}`);
     
-    const state = await this.getDuelState(duelId);
+    // Get state from cache (don't reload from DB if already cached)
+    let state = this.duels.get(duelId);
     
     if (!state) {
-      console.log(`[DuelManager] Duel ${duelId} not found`);
-      socket.emit('error', { code: 'DUEL_NOT_FOUND', message: 'Duel not found' });
-      return;
+      console.log(`[DuelManager] Duel ${duelId} not in cache, loading from DB...`);
+      state = await this.loadDuelFromDb(duelId);
+      if (!state) {
+        console.log(`[DuelManager] Duel ${duelId} not found in DB`);
+        socket.emit('error', { code: 'DUEL_NOT_FOUND', message: 'Duel not found' });
+        return;
+      }
+      this.duels.set(duelId, state);
+      console.log(`[DuelManager] Duel ${duelId} loaded and cached`);
+    } else {
+      console.log(`[DuelManager] Duel ${duelId} found in cache (creator socket: ${state.creator.odSocket}, opponent socket: ${state.opponent?.odSocket})`);
     }
 
     // Check if user is part of this duel
@@ -212,13 +221,15 @@ export class DuelManager {
       return;
     }
 
-    // Update socket reference
+    // Update socket reference - CRITICAL: use the state from cache directly
     if (isCreator) {
       state.creator.odSocket = socket.id;
       console.log(`[DuelManager] Creator ${userName} joined duel ${duelId}, socket: ${socket.id}`);
+      console.log(`[DuelManager] State after creator join - creator socket: ${state.creator.odSocket}, opponent socket: ${state.opponent?.odSocket}`);
     } else if (isOpponent && state.opponent) {
       state.opponent.odSocket = socket.id;
       console.log(`[DuelManager] Opponent ${userName} joined duel ${duelId}, socket: ${socket.id}`);
+      console.log(`[DuelManager] State after opponent join - creator socket: ${state.creator.odSocket}, opponent socket: ${state.opponent.odSocket}`);
     }
 
     // Track player -> duel mapping
