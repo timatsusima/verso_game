@@ -291,7 +291,7 @@ export class DuelManager {
     // Get isRanked from DB for matchmaking duels
     const duelInfo = await prisma.duel.findUnique({
       where: { id: duelId },
-      select: { isRanked: true, joinMethod: true },
+      select: { isRanked: true },
     });
     const isRanked = duelInfo?.isRanked ?? false;
 
