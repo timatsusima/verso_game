@@ -84,9 +84,63 @@ export default function PlayPage() {
   const [showResult, setShowResult] = useState(false);
   const [lastResult, setLastResult] = useState<typeof questionResults[0] | null>(null);
   const [showRematchOptions, setShowRematchOptions] = useState(false);
-  const [isCreatingRematch, setIsCreatingRematch] = useState(false);
-  const [isRematchComplete, setIsRematchComplete] = useState(false);
   const [rematchRequest, setRematchRequest] = useState<{ fromPlayerId: string; fromPlayerName: string } | null>(null);
+  // SINGLE SOURCE OF TRUTH: только rematchState и rematchNewDuelId
+  const [rematchState, setRematchState] = useState<'idle' | 'pending' | 'accepted'>('idle');
+  const [rematchNewDuelId, setRematchNewDuelId] = useState<string | null>(null);
+  
+  // Refs to avoid stale closures in socket handlers
+  const rematchStateRef = useRef<'idle' | 'pending' | 'accepted'>('idle');
+  const rematchNewDuelIdRef = useRef<string | null>(null);
+  const rematchStartTimeRef = useRef<number | null>(null); // Track when overlay was shown
+  const routerRef = useRef(router);
+  const languageRef = useRef(language);
+  const addToastRef = useRef(addToast);
+  
+  // Keep refs in sync
+  useEffect(() => {
+    rematchStateRef.current = rematchState;
+    rematchNewDuelIdRef.current = rematchNewDuelId;
+    routerRef.current = router;
+    languageRef.current = language;
+    addToastRef.current = addToast;
+    
+    // Track when overlay becomes visible (accepted state)
+    if (rematchState === 'accepted' && rematchNewDuelId) {
+      rematchStartTimeRef.current = Date.now();
+    } else {
+      rematchStartTimeRef.current = null;
+    }
+  }, [rematchState, rematchNewDuelId, router, language, addToast]);
+  
+  // RUNTIME CHECK: защита от некорректных состояний
+  useEffect(() => {
+    // Проверка: если accepted, но нет newDuelId → ошибка
+    if (rematchState === 'accepted' && !rematchNewDuelId) {
+      console.error('[Rematch] INVARIANT VIOLATION: rematchState=accepted but rematchNewDuelId is null. Auto-resetting.');
+      setRematchState('idle');
+      setRematchNewDuelId(null);
+      rematchStateRef.current = 'idle';
+      rematchNewDuelIdRef.current = null;
+    }
+    
+    // DEFENSIVE FAIL-SAFE: если overlay активен >25s → принудительный сброс
+    if (rematchState === 'accepted' && rematchNewDuelId && rematchStartTimeRef.current) {
+      const elapsed = Date.now() - rematchStartTimeRef.current;
+      if (elapsed > 25000) {
+        console.error('[Rematch] FAIL-SAFE: Overlay active >25s, forcing reset. elapsed=', elapsed);
+        setRematchState('idle');
+        setRematchNewDuelId(null);
+        rematchStateRef.current = 'idle';
+        rematchNewDuelIdRef.current = null;
+        rematchStartTimeRef.current = null;
+        addToastRef.current(
+          languageRef.current === 'ru' ? 'Ошибка: автоматический сброс реванша' : 'Error: automatic rematch reset',
+          'warning'
+        );
+      }
+    }
+  }, [rematchState, rematchNewDuelId]);
   
   // Duel PvP State
   const [myStatus, setMyStatus] = useState<PlayerStatus>('thinking');
@@ -105,67 +159,136 @@ export default function PlayPage() {
 
   const isCreator = creator?.id === userId;
 
-  // Handle rematch events
+  // Handle rematch events - register listeners ONCE, cleanup ONLY on unmount
   useEffect(() => {
     if (!socket) return;
 
+    console.log('[Rematch] Registering socket listeners for rematch events');
+
     const handleRematchRequest = (data: { fromPlayerId: string; fromPlayerName: string }) => {
-      console.log('Rematch request received:', data);
+      console.log('[Rematch] Request event received:', data);
       setRematchRequest({ fromPlayerId: data.fromPlayerId, fromPlayerName: data.fromPlayerName });
     };
 
     const handleRematchAccepted = (data: { oldDuelId: string; newDuelId: string }) => {
-      console.log('Rematch accepted, redirecting to:', data.newDuelId);
+      const fromState = rematchStateRef.current;
+      console.log('[Rematch] Accepted event received, newDuelId:', data.newDuelId, 'current rematchState:', fromState);
+      
+      // ANALYTICS: state transition log
+      console.info(`[Rematch] state_transition: from=${fromState} to=accepted, duelId=${data.oldDuelId}, hasNewDuelId=true, reason=accepted`);
+      
       // Clear timeout if exists
       if ((window as any).__rematchTimeoutCleanup) {
         (window as any).__rematchTimeoutCleanup();
         delete (window as any).__rematchTimeoutCleanup;
       }
-      setIsCreatingRematch(false);
-      setIsRematchComplete(false);
-      router.push(`/duel/${data.newDuelId}/play`);
+      // Set accepted state - this will show "Реванш начинается…"
+      // ИНВАРИАНТА: overlay показывается ТОЛЬКО если accepted И есть newDuelId
+      setRematchState('accepted');
+      setRematchNewDuelId(data.newDuelId);
+      // Update refs immediately
+      rematchStateRef.current = 'accepted';
+      rematchNewDuelIdRef.current = data.newDuelId;
+      rematchStartTimeRef.current = Date.now();
+      // Redirect after short delay
+      setTimeout(() => {
+        routerRef.current.push(`/duel/${data.newDuelId}/play`);
+      }, 500);
     };
 
     const handleRematchDeclined = (data?: { duelId: string; fromPlayerId: string }) => {
-      console.log('[Rematch] Declined event received', data);
+      const fromState = rematchStateRef.current;
+      console.log('[Rematch] Declined event received', {
+        payload: data,
+        currentRematchState: fromState,
+        duelId: data?.duelId,
+        fromPlayerId: data?.fromPlayerId,
+      });
+      
+      // ANALYTICS: state transition log
+      console.info(`[Rematch] state_transition: from=${fromState} to=idle, duelId=${data?.duelId || 'unknown'}, hasNewDuelId=false, reason=declined`);
+      
+      // ЖЁСТКИЙ СБРОС UI - гарантированно убрать overlay
       // Clear timeout if exists
       if ((window as any).__rematchTimeoutCleanup) {
         (window as any).__rematchTimeoutCleanup();
         delete (window as any).__rematchTimeoutCleanup;
       }
-      // Reset rematch request dialog (for opponent who received request)
+      
+      // Reset ALL rematch state
       setRematchRequest(null);
-      // Reset loading state (for initiator who is waiting)
-      setIsCreatingRematch(false);
-      setIsRematchComplete(false);
-      addToast(
-        language === 'ru' ? 'Соперник отклонил реванш' : 'Opponent declined rematch',
+      setRematchState('idle');
+      setRematchNewDuelId(null);
+      
+      // Update refs immediately
+      rematchStateRef.current = 'idle';
+      rematchNewDuelIdRef.current = null;
+      rematchStartTimeRef.current = null;
+      
+      // Show toast
+      addToastRef.current(
+        languageRef.current === 'ru' ? 'Соперник отклонил реванш' : 'Opponent declined rematch',
         'info'
       );
+      
+      console.log('[Rematch] UI reset complete, overlay should be hidden');
     };
 
     const handleError = (data: { code: string; message: string }) => {
       if (data.code === 'OPPONENT_OFFLINE') {
-        setIsCreatingRematch(false);
-        addToast(
-          language === 'ru' ? 'Соперник офлайн' : 'Opponent is offline',
+        const fromState = rematchStateRef.current;
+        console.log('[Rematch] Error: OPPONENT_OFFLINE, resetting state');
+        
+        // ANALYTICS: state transition log
+        console.info(`[Rematch] state_transition: from=${fromState} to=idle, duelId=unknown, hasNewDuelId=false, reason=error:OPPONENT_OFFLINE`);
+        
+        // Clear timeout if exists
+        if ((window as any).__rematchTimeoutCleanup) {
+          (window as any).__rematchTimeoutCleanup();
+          delete (window as any).__rematchTimeoutCleanup;
+        }
+        setRematchState('idle');
+        setRematchNewDuelId(null);
+        rematchStateRef.current = 'idle';
+        rematchNewDuelIdRef.current = null;
+        rematchStartTimeRef.current = null;
+        addToastRef.current(
+          languageRef.current === 'ru' ? 'Соперник офлайн' : 'Opponent is offline',
           'danger'
         );
-      } else if (data.code === 'DUEL_NOT_FOUND' && isCreatingRematch) {
-        setIsCreatingRematch(false);
-        addToast(
-          language === 'ru' ? 'Дуэль не найдена' : 'Duel not found',
+      } else if (data.code === 'DUEL_NOT_FOUND' && rematchStateRef.current !== 'idle') {
+        const fromState = rematchStateRef.current;
+        console.log('[Rematch] Error: DUEL_NOT_FOUND, resetting state');
+        
+        // ANALYTICS: state transition log
+        console.info(`[Rematch] state_transition: from=${fromState} to=idle, duelId=unknown, hasNewDuelId=false, reason=error:DUEL_NOT_FOUND`);
+        
+        // Clear timeout if exists
+        if ((window as any).__rematchTimeoutCleanup) {
+          (window as any).__rematchTimeoutCleanup();
+          delete (window as any).__rematchTimeoutCleanup;
+        }
+        setRematchState('idle');
+        setRematchNewDuelId(null);
+        rematchStateRef.current = 'idle';
+        rematchNewDuelIdRef.current = null;
+        rematchStartTimeRef.current = null;
+        addToastRef.current(
+          languageRef.current === 'ru' ? 'Дуэль не найдена' : 'Duel not found',
           'danger'
         );
       }
     };
 
+    // Register listeners ONCE - они НЕ будут пересоздаваться при изменении зависимостей
     socket.on('duel:rematchRequest', handleRematchRequest as any);
     socket.on('duel:rematchAccepted', handleRematchAccepted as any);
     socket.on('duel:rematchDeclined', handleRematchDeclined as any);
     socket.on('error', handleError);
 
+    // Cleanup ТОЛЬКО при unmount компонента
     return () => {
+      console.log('[Rematch] Unmounting: removing socket listeners');
       socket.off('duel:rematchRequest', handleRematchRequest as any);
       socket.off('duel:rematchAccepted', handleRematchAccepted as any);
       socket.off('duel:rematchDeclined', handleRematchDeclined as any);
@@ -176,7 +299,8 @@ export default function PlayPage() {
         delete (window as any).__rematchTimeoutCleanup;
       }
     };
-  }, [socket, router, language, addToast]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [socket]); // ТОЛЬКО socket в зависимостях - listeners не пересоздаются
 
   // Reset state when question changes
   useEffect(() => {
@@ -334,27 +458,46 @@ export default function PlayPage() {
   };
 
   const handleRematch = async (sameTopic: boolean) => {
-    // Prevent double clicks
-    if (isCreatingRematch) return;
+    // Prevent double clicks - проверяем по rematchState
+    if (rematchState !== 'idle') return;
 
     // For ranked/matchmaking duels, use Socket.IO rematch
     if (isRanked) {
-      console.log('[Rematch] Initiating rematch request for ranked duel');
+      console.log('[Rematch] Initiating rematch request for ranked duel, duelId:', duelId);
+      
+      // ANALYTICS: state transition log
+      console.info(`[Rematch] state_transition: from=idle to=pending, duelId=${duelId}, hasNewDuelId=false, reason=request`);
+      
       requestRematch();
-      setIsCreatingRematch(true);
-      setIsRematchComplete(false);
+      // Set pending state - show "Ожидаем ответа..." NOT "Реванш начинается…"
+      setRematchState('pending');
+      setRematchNewDuelId(null);
+      // Update refs immediately
+      rematchStateRef.current = 'pending';
+      rematchNewDuelIdRef.current = null;
+      rematchStartTimeRef.current = null;
       
       // Timeout fallback: if no accept/decline arrives in 20s, treat as canceled
       const timeoutId = setTimeout(() => {
-        console.log('[Rematch] Timeout: no response received after 20s, canceling rematch');
-        setIsCreatingRematch(false);
-        setIsRematchComplete(false);
-        addToast(
-          language === 'ru' ? 'Время ожидания реванша истекло' : 'Rematch request timed out',
+        const fromState = rematchStateRef.current;
+        console.log('[Rematch] TIMEOUT: no response received after 20s, canceling rematch. Current state:', fromState);
+        
+        // ANALYTICS: state transition log
+        console.info(`[Rematch] state_transition: from=${fromState} to=idle, duelId=${duelId}, hasNewDuelId=false, reason=timeout`);
+        
+        // ЖЁСТКИЙ СБРОС при таймауте
+        setRematchState('idle');
+        setRematchNewDuelId(null);
+        rematchStateRef.current = 'idle';
+        rematchNewDuelIdRef.current = null;
+        rematchStartTimeRef.current = null;
+        addToastRef.current(
+          languageRef.current === 'ru' ? 'Нет ответа от соперника. Реванш отменён.' : 'No response from opponent. Rematch canceled.',
           'warning'
         );
         // Clean up timeout reference
         delete (window as any).__rematchTimeoutCleanup;
+        console.log('[Rematch] Timeout cleanup complete, overlay should be hidden');
       }, 20000);
       
       // Clear timeout when rematch is accepted or declined
@@ -552,19 +695,36 @@ export default function PlayPage() {
         )}
 
         {/* Rematch Loading Overlay */}
-        <DuelLoadingOverlay
-          isLoading={isCreatingRematch}
-          isComplete={isRematchComplete}
-          language={language}
-          topic={topic || ''}
-          mode="rematch"
-          playerNames={{
-            you: firstName || 'You',
-            opponent: opponentName,
-          }}
-          difficulty={difficultyName}
-          questionsCount={totalQuestions || 10}
-        />
+        {/* ИНВАРИАНТА: overlay показывается ТОЛЬКО если rematchState === 'accepted' И есть rematchNewDuelId */}
+        {rematchState === 'accepted' && rematchNewDuelId ? (
+          <DuelLoadingOverlay
+            isLoading={true}
+            isComplete={false}
+            language={language}
+            topic={topic || ''}
+            mode="rematch"
+            playerNames={{
+              you: firstName || 'You',
+              opponent: opponentName,
+            }}
+            difficulty={difficultyName}
+            questionsCount={totalQuestions || 10}
+          />
+        ) : rematchState === 'pending' ? (
+          <DuelLoadingOverlay
+            isLoading={true}
+            isComplete={false}
+            language={language}
+            topic={topic || ''}
+            mode="rematch-pending"
+            playerNames={{
+              you: firstName || 'You',
+              opponent: opponentName,
+            }}
+            difficulty={difficultyName}
+            questionsCount={totalQuestions || 10}
+          />
+        ) : null}
 
         <DuelResultScreen
           outcome={outcome}
@@ -580,7 +740,7 @@ export default function PlayPage() {
             reset();
             router.push('/');
           }}
-          isLoadingRematch={isCreatingRematch}
+          isLoadingRematch={rematchState !== 'idle'}
           rating={ratingData || undefined}
           isRanked={isRanked || finalResult?.isRanked || false}
         />

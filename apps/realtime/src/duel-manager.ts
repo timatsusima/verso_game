@@ -75,6 +75,8 @@ export class DuelManager {
   private io: TypedServer;
   private duels: Map<string, DuelState> = new Map();
   private playerToDuel: Map<string, string> = new Map();
+  // Track pending rematch requests: duelId -> requesterUserId
+  private pendingRematchRequests: Map<string, string> = new Map();
 
   constructor(io: TypedServer) {
     this.io = io;
@@ -1063,15 +1065,16 @@ export class DuelManager {
    * Handle rematch request
    */
   async handleRematchRequest(socket: TypedSocket, duelId: string): Promise<void> {
+    const userId = socket.data.userId;
+    const userName = socket.data.username || 'Player';
+    
+    console.log(`[DuelManager] handleRematchRequest called: duelId=${duelId}, userId=${userId}`);
     // #region agent log
     debugLog('duel-manager.ts:handleRematchRequest', 'handleRematchRequest called', { 
       duelId, 
       userId: socket.data.userId 
     });
     // #endregion
-
-    const userId = socket.data.userId;
-    const userName = socket.data.username || 'Player';
 
     // Get duel state (cache or DB)
     const duelInfo = await this.getDuelStateForRematch(duelId);
@@ -1128,6 +1131,22 @@ export class DuelManager {
       fromPlayerId: userId,
       fromPlayerName: userName,
     });
+
+    // Store pending rematch request: requester is the initiator (current userId)
+    this.pendingRematchRequests.set(duelId, userId);
+    
+    // METRICS: структурированный лог для rematch_request_created
+    const metricsLog = JSON.stringify({
+      event: 'rematch_request_created',
+      duelId,
+      requesterId: userId,
+      opponentId: otherPlayerId,
+      foundSocket: !!otherSocket,
+      socketId: otherSocket?.id || null,
+      remainingPending: this.pendingRematchRequests.size,
+      ts: Date.now(),
+    });
+    console.log(`[METRICS] ${metricsLog}`);
 
     // #region agent log
     debugLog('duel-manager.ts:handleRematchRequest', 'Rematch request sent', { 
@@ -1209,6 +1228,23 @@ export class DuelManager {
     });
     // #endregion
 
+    // Защита от дубликатов: проверяем, есть ли уже pending request для этого duelId
+    const existingRequesterId = this.pendingRematchRequests.get(duelId);
+    if (!existingRequesterId) {
+      // METRICS: предупреждение о missing pending
+      const warnLog = JSON.stringify({
+        event: 'rematch_pending_missing_on_action',
+        level: 'WARN',
+        action: 'accept',
+        duelId,
+        accepterId: userId,
+        requesterId: otherPlayerId,
+        remainingPending: this.pendingRematchRequests.size,
+        ts: Date.now(),
+      });
+      console.warn(`[METRICS] ${warnLog}`);
+    }
+
     // Create new duel
     try {
       const newDuel = await prisma.duel.create({
@@ -1247,6 +1283,20 @@ export class DuelManager {
           newDuelId: newDuel.id,
         });
 
+        // METRICS: структурированный лог для rematch_accepted_emitted
+        const metricsLog = JSON.stringify({
+          event: 'rematch_accepted_emitted',
+          duelId,
+          newDuelId: newDuel.id,
+          requesterId: otherPlayerId,
+          accepterId: userId,
+          foundSocket: true,
+          socketId: requesterSocket.id,
+          remainingPending: this.pendingRematchRequests.size - 1, // before finally cleanup
+          ts: Date.now(),
+        });
+        console.log(`[METRICS] ${metricsLog}`);
+
         // #region agent log
         debugLog('duel-manager.ts:handleRematchAccept', 'Rematch accepted emitted to requester', { 
           duelId, 
@@ -1255,19 +1305,38 @@ export class DuelManager {
         });
         // #endregion
       } else {
+        // METRICS: CRITICAL - socket не найден
+        const criticalLog = JSON.stringify({
+          event: 'rematch_requester_socket_not_found',
+          level: 'CRITICAL',
+          action: 'accept',
+          duelId,
+          newDuelId: newDuel.id,
+          requesterId: otherPlayerId,
+          accepterId: userId,
+          foundSocket: false,
+          socketId: null,
+          remainingPending: this.pendingRematchRequests.size - 1,
+          ts: Date.now(),
+        });
+        console.error(`[METRICS] ${criticalLog}`);
+        
         // #region agent log
         debugLog('duel-manager.ts:handleRematchAccept', 'Requester socket not found, cannot notify', { 
           duelId, 
           requesterUserId: otherPlayerId 
         });
         // #endregion
-        console.log(`[DuelManager] Warning: Requester socket not found for rematch accept (userId: ${otherPlayerId})`);
       }
 
       console.log(`[DuelManager] Rematch accepted, new duel: ${newDuel.id}`);
     } catch (error) {
-      console.error('Failed to create rematch duel:', error);
+      console.error('[DuelManager] Failed to create rematch duel:', error);
       socket.emit('error', { code: 'INTERNAL_ERROR', message: 'Failed to create rematch' });
+    } finally {
+      // FINAL GUARANTEE: всегда очищаем pending request, даже при ошибке
+      const wasDeleted = this.pendingRematchRequests.delete(duelId);
+      console.log(`[DuelManager] Cleaned up pending rematch request: duelId=${duelId}, wasDeleted=${wasDeleted}, remainingPendingRequests=${this.pendingRematchRequests.size}`);
     }
   }
 
@@ -1276,10 +1345,13 @@ export class DuelManager {
    */
   async handleRematchDecline(socket: TypedSocket, duelId: string): Promise<void> {
     const userId = socket.data.userId;
+    
+    console.log(`[DuelManager] handleRematchDecline called: duelId=${duelId}, declinerUserId=${userId}`);
 
     // Get duel state (cache or DB)
     const duelInfo = await this.getDuelStateForRematch(duelId);
     if (!duelInfo) {
+      console.log(`[DuelManager] ERROR: Duel not found for decline: duelId=${duelId}`);
       socket.emit('error', { code: 'DUEL_NOT_FOUND', message: 'Duel not found' });
       return;
     }
@@ -1293,28 +1365,83 @@ export class DuelManager {
       return;
     }
 
-    // Find the requester (other player)
-    const requesterId = isCreator ? duelInfo.opponentId : duelInfo.creatorId;
-    const requesterSocketId = isCreator ? duelInfo.opponentSocket : duelInfo.creatorSocket;
-
-    // Try to find requester socket
-    let requesterSocket: TypedSocket | null = null;
-    if (requesterSocketId) {
-      requesterSocket = this.io.sockets.sockets.get(requesterSocketId) || null;
+    // Защита от дубликатов: проверяем, есть ли уже pending request
+    const pendingRequesterId = this.pendingRematchRequests.get(duelId);
+    if (!pendingRequesterId) {
+      // METRICS: предупреждение о missing pending
+      const warnLog = JSON.stringify({
+        event: 'rematch_pending_missing_on_action',
+        level: 'WARN',
+        action: 'decline',
+        duelId,
+        declinerId: userId,
+        requesterId: isCreator ? duelInfo.opponentId : duelInfo.creatorId,
+        remainingPending: this.pendingRematchRequests.size,
+        ts: Date.now(),
+      });
+      console.warn(`[METRICS] ${warnLog}`);
     }
+
+    // Find the requester (initiator) - check pending requests first, then fallback to duel participants
+    let requesterId: string | null = null;
     
-    // If socket not found by ID, try to find by userId
-    if (!requesterSocket && requesterId) {
-      requesterSocket = this.findSocketByUserId(requesterId);
+    if (pendingRequesterId) {
+      requesterId = pendingRequesterId;
+      console.log(`[DuelManager] Found requester from pending requests: requesterId=${requesterId}`);
+    } else {
+      // Fallback: determine requester from duel participants (other player)
+      requesterId = isCreator ? duelInfo.opponentId : duelInfo.creatorId;
+      console.log(`[DuelManager] Using fallback: requesterId from duel participants: requesterId=${requesterId}`);
     }
 
-    // Notify the requester (initiator) if socket exists
-    if (requesterSocket && requesterId) {
+    if (!requesterId) {
+      console.error(`[DuelManager] ERROR: RequesterId not found for decline: duelId=${duelId}, declinerUserId=${userId}`);
+      debugLog('duel-manager.ts:handleRematchDecline', 'RequesterId not found', {
+        duelId,
+        declinerUserId: userId,
+      });
+      // FINAL GUARANTEE: очищаем pending request даже при ошибке
+      this.pendingRematchRequests.delete(duelId);
+      return;
+    }
+
+    // ГАРАНТИРОВАННАЯ ДОСТАВКА: ищем socket ТОЛЬКО по userId (единый источник truth)
+    let requesterSocket: TypedSocket | null = this.findSocketByUserId(requesterId);
+    
+    if (requesterSocket) {
+      console.log(`[DuelManager] Found requester socket: socketId=${requesterSocket.id}, rooms=[${Array.from(requesterSocket.rooms).join(', ')}]`);
+    } else {
+      console.error(`[DuelManager] ❌ CRITICAL: Requester socket NOT FOUND by userId: requesterId=${requesterId}`);
+      // Fallback: try to find by socket ID from cache
+      const requesterSocketId = isCreator ? duelInfo.opponentSocket : duelInfo.creatorSocket;
+      if (requesterSocketId) {
+        requesterSocket = this.io.sockets.sockets.get(requesterSocketId) || null;
+        if (requesterSocket) {
+          console.log(`[DuelManager] Found requester socket by socketId fallback: socketId=${requesterSocket.id}`);
+        }
+      }
+    }
+
+    // Notify the requester (initiator) - try to find socket, but log if not found
+    if (requesterSocket) {
       requesterSocket.emit('duel:rematchDeclined', {
         duelId,
         fromPlayerId: userId,
       });
-      console.log(`[DuelManager] Rematch declined by ${userId}, notified requester ${requesterId} (socket: ${requesterSocket.id})`);
+      
+      // METRICS: структурированный лог для rematch_declined_emitted
+      const metricsLog = JSON.stringify({
+        event: 'rematch_declined_emitted',
+        duelId,
+        requesterId,
+        opponentId: userId,
+        foundSocket: true,
+        socketId: requesterSocket.id,
+        remainingPending: this.pendingRematchRequests.size - 1, // before finally cleanup
+        ts: Date.now(),
+      });
+      console.log(`[METRICS] ${metricsLog}`);
+      
       // #region agent log
       debugLog('duel-manager.ts:handleRematchDecline', 'Rematch declined event sent to requester', {
         duelId,
@@ -1324,14 +1451,32 @@ export class DuelManager {
       });
       // #endregion
     } else {
-      console.log(`[DuelManager] Rematch declined by ${userId}, but requester socket not found for ${requesterId}`);
+      // METRICS: CRITICAL - socket не найден
+      const criticalLog = JSON.stringify({
+        event: 'rematch_requester_socket_not_found',
+        level: 'CRITICAL',
+        action: 'decline',
+        duelId,
+        requesterId,
+        opponentId: userId,
+        foundSocket: false,
+        socketId: null,
+        remainingPending: this.pendingRematchRequests.size - 1,
+        ts: Date.now(),
+      });
+      console.error(`[METRICS] ${criticalLog}`);
+      
       // #region agent log
-      debugLog('duel-manager.ts:handleRematchDecline', 'Requester socket not found, cannot notify', {
+      debugLog('duel-manager.ts:handleRematchDecline', 'CRITICAL: Requester socket not found, cannot notify', {
         duelId,
         declinerUserId: userId,
         requesterUserId: requesterId,
       });
       // #endregion
     }
+    
+    // FINAL GUARANTEE: всегда очищаем pending request, даже если socket не найден
+    const wasDeleted = this.pendingRematchRequests.delete(duelId);
+    console.log(`[DuelManager] Cleaned up pending rematch request: duelId=${duelId}, wasDeleted=${wasDeleted}, remainingPendingRequests=${this.pendingRematchRequests.size}`);
   }
 }

@@ -8,7 +8,7 @@ interface DuelLoadingOverlayProps {
   isComplete: boolean;
   language: 'ru' | 'en';
   topic?: string;
-  mode?: 'start' | 'rematch';
+  mode?: 'start' | 'rematch' | 'rematch-pending';
   playerNames?: {
     you: string;
     opponent: string;
@@ -56,6 +56,10 @@ const TITLES = {
     ru: 'Реванш начинается…',
     en: 'Rematch incoming…',
   },
+  'rematch-pending': {
+    ru: 'Ожидаем ответа соперника…',
+    en: 'Waiting for opponent response…',
+  },
 };
 
 export function DuelLoadingOverlay({ 
@@ -74,8 +78,8 @@ export function DuelLoadingOverlay({
   const animationRef = useRef<number | null>(null);
   const startTimeRef = useRef<number>(0);
 
-  const phases = mode === 'rematch' ? PHASES_REMATCH[language] : PHASES_START[language];
-  const title = TITLES[mode][language];
+  const phases = (mode === 'rematch' || mode === 'rematch-pending') ? PHASES_REMATCH[language] : PHASES_START[language];
+  const title = TITLES[mode]?.[language] || TITLES.start[language];
   
   // Faster progress for rematch (2.5-4s to 90%)
   const progressDuration = mode === 'rematch' ? 3000 : 8000;
@@ -183,7 +187,7 @@ export function DuelLoadingOverlay({
       </h1>
 
       {/* Rematch: Player names */}
-      {mode === 'rematch' && playerNames && (
+      {(mode === 'rematch' || mode === 'rematch-pending') && playerNames && (
         <p className="text-lg text-tg-text-secondary mb-2">
           {playerNames.you} <span className="text-tg-hint">vs</span> {playerNames.opponent}
         </p>
@@ -197,7 +201,7 @@ export function DuelLoadingOverlay({
       )}
 
       {/* Rematch: Additional info */}
-      {mode === 'rematch' && (difficulty || questionsCount) && (
+      {(mode === 'rematch' || mode === 'rematch-pending') && (difficulty || questionsCount) && (
         <p className="text-sm text-tg-hint mb-8">
           {difficulty && (
             <span className="capitalize">{difficulty}</span>
