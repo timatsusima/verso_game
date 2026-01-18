@@ -17,6 +17,8 @@ export function useSocket(duelId: string | null) {
   const firstName = useAuthStore((state) => state.firstName);
   
   const {
+    creator,
+    opponent,
     setDuelInfo,
     setPlayers,
     setCurrentQuestion,
@@ -176,7 +178,33 @@ export function useSocket(duelId: string | null) {
 
     socket.on('duel:finished', (result: DuelResult) => {
       console.log('Duel finished:', result);
+      console.log('Duel finished - creatorName:', result.creatorName, 'opponentName:', result.opponentName);
+      
       setFinalResult(result);
+      
+      // Update player names from result if provided (preserve existing player data)
+      if (result.creatorName || result.opponentName) {
+        // Get current players from store to preserve IDs
+        const currentCreator = creator;
+        const currentOpponent = opponent;
+        
+        const updatedCreator = {
+          id: currentCreator?.id || '',
+          name: result.creatorName || currentCreator?.name || 'Player 1',
+          score: result.creatorScore,
+          hasAnswered: currentCreator?.hasAnswered || false,
+        };
+        
+        const updatedOpponent = result.opponentName ? {
+          id: currentOpponent?.id || '',
+          name: result.opponentName,
+          score: result.opponentScore,
+          hasAnswered: currentOpponent?.hasAnswered || false,
+        } : null;
+        
+        setPlayers(updatedCreator, updatedOpponent, userId || '');
+      }
+      
       // Update isRanked from result
       if (result.isRanked !== undefined) {
         setDuelInfo({

@@ -792,6 +792,8 @@ export class DuelManager {
       seed: state.seed,
       results,
       isRanked: duel?.isRanked ?? false,
+      creatorName: state.creator.odName, // odName contains displayName from getDisplayName
+      opponentName: state.opponent?.odName,
     };
 
     // Send final result

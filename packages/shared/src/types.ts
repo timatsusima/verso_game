@@ -163,4 +163,6 @@ export interface DuelResult {
   seed: string;
   results: QuestionResult[];
   isRanked?: boolean; // Whether this duel affects rating
+  creatorName?: string; // Display name of creator
+  opponentName?: string; // Display name of opponent
 }
