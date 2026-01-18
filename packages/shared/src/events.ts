@@ -49,6 +49,7 @@ export interface ServerToClientEvents {
   'duel:joined': (data: { 
     duelId: string;
     state: DuelGameState;
+    isRanked?: boolean;
   }) => void;
   
   // Another player joined

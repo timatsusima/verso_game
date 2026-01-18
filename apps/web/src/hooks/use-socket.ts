@@ -42,16 +42,26 @@ export function useSocket(duelId: string | null) {
       status: state.status,
     });
 
+    const creatorName = state.players.creator.displayName || state.players.creator.odName || 'Player 1';
+    const opponentName = state.players.opponent 
+      ? (state.players.opponent.displayName || state.players.opponent.odName || 'Player 2')
+      : null;
+
+    console.log('[useSocket] Updating players:', {
+      creator: { id: state.players.creator.odId, name: creatorName, displayName: state.players.creator.displayName, odName: state.players.creator.odName },
+      opponent: state.players.opponent ? { id: state.players.opponent.odId, name: opponentName, displayName: state.players.opponent.displayName, odName: state.players.opponent.odName } : null,
+    });
+
     const creator = {
       id: state.players.creator.odId,
-      name: state.players.creator.displayName || state.players.creator.odName,
+      name: creatorName,
       score: state.players.creator.score,
       hasAnswered: state.players.creator.hasAnswered,
     };
 
     const opponent = state.players.opponent ? {
       id: state.players.opponent.odId,
-      name: state.players.opponent.displayName || state.players.opponent.odName,
+      name: opponentName!,
       score: state.players.opponent.score,
       hasAnswered: state.players.opponent.hasAnswered,
     } : null;
@@ -99,11 +109,22 @@ export function useSocket(duelId: string | null) {
     socket.on('duel:joined', (data) => {
       console.log('Joined duel:', data);
       console.log('Duel status:', data.state.status);
+      console.log('Is ranked:', data.isRanked);
       handleStateUpdate(data.state);
       // For pending status (matchmaking), we're connected but waiting for questions
       if (data.state.status === 'pending') {
         setConnected(true);
         setStatus('pending');
+      }
+      // Set isRanked if provided
+      if (data.isRanked !== undefined) {
+        setDuelInfo({
+          duelId: data.duelId,
+          topic: data.state.topic,
+          questionsCount: data.state.questionsCount,
+          status: data.state.status,
+          isRanked: data.isRanked,
+        });
       }
     });
 
@@ -123,6 +144,7 @@ export function useSocket(duelId: string | null) {
       setCurrentQuestion(data.question, data.totalQuestions);
       setStatus('in_progress'); // Ensure status is in_progress when question arrives
       setConnected(true); // Ensure connected when question arrives
+      // Note: player names should already be set from duel:joined, but we can refresh state if needed
     });
 
     socket.on('duel:tick', (data) => {

@@ -319,7 +319,8 @@ export default function PlayPage() {
   // Show loading if not connected OR if status is pending (matchmaking, generating questions)
   if ((!isConnected || status === 'pending') && !finalResult) {
     // For matchmaking duels, use DuelLoadingOverlay with proper states
-    const isMatchmaking = isRanked && (status === 'pending' || !isConnected);
+    // Check if it's a matchmaking duel: isRanked OR status is pending (matchmaking creates duels with pending status)
+    const isMatchmaking = (isRanked || status === 'pending') && (status === 'pending' || !isConnected);
     
     if (isMatchmaking) {
       return (
@@ -331,7 +332,10 @@ export default function PlayPage() {
           mode="start"
           playerNames={opponent ? {
             you: firstName || 'You',
-            opponent: opponent.name,
+            opponent: opponent.name || 'Opponent',
+          } : creator ? {
+            you: firstName || 'You',
+            opponent: creator.name || 'Opponent',
           } : undefined}
         />
       );

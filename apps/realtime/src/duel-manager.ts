@@ -288,12 +288,20 @@ export class DuelManager {
 
     console.log(`[DuelManager] Both players joined: ${bothJoined} (creator socket: ${currentState.creator.odSocket}, opponent socket: ${currentState.opponent?.odSocket})`);
 
+    // Get isRanked from DB for matchmaking duels
+    const duelInfo = await prisma.duel.findUnique({
+      where: { id: duelId },
+      select: { isRanked: true, joinMethod: true },
+    });
+    const isRanked = duelInfo?.isRanked ?? false;
+
     // Send joined event (use currentState to ensure latest socket refs)
     const gameState = this.buildGameState(currentState);
-    console.log(`[DuelManager] Sending duel:joined to ${userName} (socket: ${socket.id}), status: ${gameState.status}`);
+    console.log(`[DuelManager] Sending duel:joined to ${userName} (socket: ${socket.id}), status: ${gameState.status}, isRanked: ${isRanked}`);
     socket.emit('duel:joined', {
       duelId,
       state: gameState,
+      isRanked,
     });
     console.log(`[DuelManager] ✅ duel:joined sent to ${userName}`);
 
