@@ -122,11 +122,10 @@ export default function PlayPage() {
     const handleRematchDeclined = () => {
       console.log('Rematch declined');
       setRematchRequest(null);
-      addToast({
-        id: 'rematch-declined',
-        message: language === 'ru' ? 'Соперник отклонил реванш' : 'Opponent declined rematch',
-        type: 'info',
-      });
+      addToast(
+        language === 'ru' ? 'Соперник отклонил реванш' : 'Opponent declined rematch',
+        'info'
+      );
     };
 
     socket.on('duel:rematchRequest', handleRematchRequest);
