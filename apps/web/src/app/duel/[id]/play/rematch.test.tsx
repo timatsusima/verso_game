@@ -63,9 +63,13 @@ describe('Rematch Decline Flow', () => {
     rematchState = 'idle';
     rematchNewDuelId = null;
     
-    // Step 3: Verify overlay condition
-    const shouldRenderOverlay = rematchState === 'accepted' && rematchNewDuelId !== null;
-    expect(shouldRenderOverlay).toBe(false);
+    // Step 3: Verify state after decline
     expect(rematchState).toBe('idle');
+    expect(rematchNewDuelId).toBeNull();
+    
+    // Step 4: Verify overlay rendering logic (should NOT render after decline)
+    const shouldRenderOverlay = (state: 'idle' | 'pending' | 'accepted', newDuelId: string | null): boolean => 
+      state === 'accepted' && newDuelId !== null;
+    expect(shouldRenderOverlay(rematchState, rematchNewDuelId)).toBe(false);
   });
 });

@@ -89,6 +89,9 @@ export default function PlayPage() {
   const [rematchState, setRematchState] = useState<'idle' | 'pending' | 'accepted'>('idle');
   const [rematchNewDuelId, setRematchNewDuelId] = useState<string | null>(null);
   
+  // Toasts
+  const { toasts, addToast, removeToast, clearToasts } = useDuelToasts();
+  
   // Refs to avoid stale closures in socket handlers
   const rematchStateRef = useRef<'idle' | 'pending' | 'accepted'>('idle');
   const rematchNewDuelIdRef = useRef<string | null>(null);
@@ -154,9 +157,6 @@ export default function PlayPage() {
   } | null>(null);
   const questionIndexRef = useRef(currentQuestionIndex);
   
-  // Toasts
-  const { toasts, addToast, removeToast, clearToasts } = useDuelToasts();
-
   const isCreator = creator?.id === userId;
 
   // Handle rematch events - register listeners ONCE, cleanup ONLY on unmount
@@ -518,9 +518,8 @@ export default function PlayPage() {
       navigator.vibrate(10);
     }
     
-    setIsCreatingRematch(true);
-    setIsRematchComplete(false);
-
+    // For invite duels, we don't use rematchState (it's only for ranked/matchmaking)
+    // Just show loading via API call
     try {
       const response = await fetch('/api/duel/create', {
         method: 'POST',
@@ -542,17 +541,14 @@ export default function PlayPage() {
 
       const data = await response.json();
       
-      // Mark as complete to animate progress to 100%
-      setIsRematchComplete(true);
-      
-      // Wait for animation, then redirect
-      setTimeout(() => {
-        router.push(`/duel/${data.duelId}/invite`);
-      }, 500);
+      // Redirect to invite page
+      router.push(`/duel/${data.duelId}/invite`);
     } catch (err) {
       console.error('Rematch error:', err);
-      setIsCreatingRematch(false);
-      setIsRematchComplete(false);
+      addToast(
+        language === 'ru' ? 'Ошибка при создании реванша' : 'Error creating rematch',
+        'danger'
+      );
     }
   };
 
@@ -684,7 +680,7 @@ export default function PlayPage() {
                   onClick={() => {
                     acceptRematch();
                     setRematchRequest(null);
-                    setIsCreatingRematch(true);
+                    // State will be set by handleRematchAccepted handler
                   }}
                 >
                   {language === 'ru' ? 'Принять' : 'Accept'}
