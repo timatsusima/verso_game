@@ -115,11 +115,14 @@ export function useSocket(duelId: string | null) {
     socket.on('duel:starting', (data) => {
       console.log('Duel starting in:', data.startsIn);
       setStatus('in_progress');
+      setConnected(true); // Ensure connected when duel starts
     });
 
     socket.on('duel:question', (data) => {
-      console.log('New question:', data);
+      console.log('New question received:', data);
       setCurrentQuestion(data.question, data.totalQuestions);
+      setStatus('in_progress'); // Ensure status is in_progress when question arrives
+      setConnected(true); // Ensure connected when question arrives
     });
 
     socket.on('duel:tick', (data) => {

@@ -247,7 +247,9 @@ export class DuelManager {
     this.playerToDuel.set(userId, duelId);
 
     // Join socket room
-    socket.join(this.getRoomName(duelId));
+    const roomName = this.getRoomName(duelId);
+    socket.join(roomName);
+    console.log(`[DuelManager] ${userName} (socket: ${socket.id}) joined room ${roomName}`);
 
     // Check if both players are joined
     // IMPORTANT: Get state again from cache to ensure we have latest socket references
@@ -265,10 +267,13 @@ export class DuelManager {
     console.log(`[DuelManager] Both players joined: ${bothJoined} (creator socket: ${currentState.creator.odSocket}, opponent socket: ${currentState.opponent?.odSocket})`);
 
     // Send joined event (use currentState to ensure latest socket refs)
+    const gameState = this.buildGameState(currentState);
+    console.log(`[DuelManager] Sending duel:joined to ${userName} (socket: ${socket.id}), status: ${gameState.status}`);
     socket.emit('duel:joined', {
       duelId,
-      state: this.buildGameState(currentState),
+      state: gameState,
     });
+    console.log(`[DuelManager] ✅ duel:joined sent to ${userName}`);
 
     // Notify others if this is a reconnection during game
     if (currentState.status === 'in_progress') {
