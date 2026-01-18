@@ -195,18 +195,29 @@ export class DuelManager {
     console.log(`[DuelManager] duel:join received from ${userName} (${userId}) for duel ${duelId}, socket: ${socket.id}`);
     
     // Get state from cache (don't reload from DB if already cached)
+    // CRITICAL: Check cache first to avoid race condition when both players join simultaneously
     let state = this.duels.get(duelId);
     
     if (!state) {
       console.log(`[DuelManager] Duel ${duelId} not in cache, loading from DB...`);
-      state = await this.loadDuelFromDb(duelId);
-      if (!state) {
+      const loadedState = await this.loadDuelFromDb(duelId);
+      if (!loadedState) {
         console.log(`[DuelManager] Duel ${duelId} not found in DB`);
         socket.emit('error', { code: 'DUEL_NOT_FOUND', message: 'Duel not found' });
         return;
       }
-      this.duels.set(duelId, state);
-      console.log(`[DuelManager] Duel ${duelId} loaded and cached`);
+      
+      // CRITICAL: Check cache again after loading (another player might have loaded it)
+      // Use existing cached state if available, otherwise use newly loaded state
+      const existingState = this.duels.get(duelId);
+      if (existingState) {
+        console.log(`[DuelManager] Duel ${duelId} was cached by another player while loading, using cached state`);
+        state = existingState;
+      } else {
+        this.duels.set(duelId, loadedState);
+        state = loadedState;
+        console.log(`[DuelManager] Duel ${duelId} loaded and cached`);
+      }
     } else {
       console.log(`[DuelManager] Duel ${duelId} found in cache (creator socket: ${state.creator.odSocket}, opponent socket: ${state.opponent?.odSocket})`);
     }
