@@ -18,6 +18,25 @@ import {
   QUESTION_RESULT_DISPLAY_TIME,
 } from '@tg-duel/shared';
 import { prisma } from './prisma.js';
+import { appendFileSync } from 'fs';
+import { join } from 'path';
+
+// Helper for debug logging
+const DEBUG_LOG_PATH = join(process.cwd(), '.cursor', 'debug.log');
+function debugLog(location: string, message: string, data: any) {
+  try {
+    const logEntry = JSON.stringify({
+      location,
+      message,
+      data,
+      timestamp: Date.now(),
+      sessionId: 'debug-session',
+    }) + '\n';
+    appendFileSync(DEBUG_LOG_PATH, logEntry, 'utf8');
+  } catch (err) {
+    // Ignore logging errors
+  }
+}
 
 type TypedServer = Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>;
 type TypedSocket = Socket<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>;
@@ -943,102 +962,306 @@ export class DuelManager {
   }
 
   /**
+   * Find socket by userId from all connected sockets
+   */
+  private findSocketByUserId(userId: string): TypedSocket | null {
+    for (const [socketId, socket] of this.io.sockets.sockets.entries()) {
+      if (socket.data.userId === userId) {
+        return socket;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Get duel state for rematch - tries cache first, then DB
+   * Returns minimal state needed for rematch operations
+   */
+  private async getDuelStateForRematch(duelId: string): Promise<{
+    topic: string;
+    questionsCount: number;
+    language: 'ru' | 'en';
+    isRanked: boolean;
+    creatorId: string;
+    opponentId: string | null;
+    creatorSocket: string | null;
+    opponentSocket: string | null;
+  } | null> {
+    // #region agent log
+    debugLog('duel-manager.ts:getDuelStateForRematch', 'getDuelStateForRematch called', { duelId });
+    // #endregion
+
+    // Try cache first
+    const cachedState = this.duels.get(duelId);
+    if (cachedState) {
+      // #region agent log
+      debugLog('duel-manager.ts:getDuelStateForRematch', 'Found duel in cache', { duelId, hasOpponent: !!cachedState.opponent });
+      // #endregion
+
+      return {
+        topic: cachedState.topic,
+        questionsCount: cachedState.questionsCount,
+        language: cachedState.language,
+        isRanked: (cachedState as any).isRanked ?? false, // May not be in DuelState type
+        creatorId: cachedState.creator.odId,
+        opponentId: cachedState.opponent?.odId ?? null,
+        creatorSocket: cachedState.creator.odSocket,
+        opponentSocket: cachedState.opponent?.odSocket ?? null,
+      };
+    }
+
+    // #region agent log
+    debugLog('duel-manager.ts:getDuelStateForRematch', 'Cache miss, loading from DB', { duelId });
+    // #endregion
+
+    // Load from DB
+    const duel = await prisma.duel.findUnique({
+      where: { id: duelId },
+      select: {
+        id: true,
+        topic: true,
+        questionsCount: true,
+        language: true,
+        isRanked: true,
+        creatorId: true,
+        opponentId: true,
+      },
+    });
+
+    if (!duel) {
+      // #region agent log
+      debugLog('duel-manager.ts:getDuelStateForRematch', 'Duel not found in DB', { duelId });
+      // #endregion
+      return null;
+    }
+
+    // Try to find sockets by userId (they may still be connected)
+    const creatorSocket = this.findSocketByUserId(duel.creatorId);
+    const opponentSocket = duel.opponentId ? this.findSocketByUserId(duel.opponentId) : null;
+
+    // #region agent log
+    debugLog('duel-manager.ts:getDuelStateForRematch', 'Loaded from DB, found sockets', { 
+      duelId, 
+      hasCreatorSocket: !!creatorSocket, 
+      hasOpponentSocket: !!opponentSocket 
+    });
+    // #endregion
+
+    return {
+      topic: duel.topic,
+      questionsCount: duel.questionsCount,
+      language: duel.language as 'ru' | 'en',
+      isRanked: duel.isRanked,
+      creatorId: duel.creatorId,
+      opponentId: duel.opponentId,
+      creatorSocket: creatorSocket?.id ?? null,
+      opponentSocket: opponentSocket?.id ?? null,
+    };
+  }
+
+  /**
    * Handle rematch request
    */
   async handleRematchRequest(socket: TypedSocket, duelId: string): Promise<void> {
-    const state = this.duels.get(duelId);
-    if (!state) {
+    // #region agent log
+    debugLog('duel-manager.ts:handleRematchRequest', 'handleRematchRequest called', { 
+      duelId, 
+      userId: socket.data.userId 
+    });
+    // #endregion
+
+    const userId = socket.data.userId;
+    const userName = socket.data.username || 'Player';
+
+    // Get duel state (cache or DB)
+    const duelInfo = await this.getDuelStateForRematch(duelId);
+    if (!duelInfo) {
+      // #region agent log
+      debugLog('duel-manager.ts:handleRematchRequest', 'Duel not found for rematch request', { 
+        duelId, 
+        userId 
+      });
+      // #endregion
       socket.emit('error', { code: 'DUEL_NOT_FOUND', message: 'Duel not found' });
       return;
     }
 
-    const userId = socket.data.userId;
-    const userName = socket.data.username || 'Player';
-    const isCreator = state.creator.odId === userId;
-    const isOpponent = state.opponent?.odId === userId;
+    // Verify user is part of this duel
+    const isCreator = duelInfo.creatorId === userId;
+    const isOpponent = duelInfo.opponentId === userId;
 
     if (!isCreator && !isOpponent) {
       socket.emit('error', { code: 'NOT_IN_DUEL', message: 'You are not part of this duel' });
       return;
     }
 
-    // Send rematch request to the other player
-    const otherPlayerSocket = isCreator ? state.opponent?.odSocket : state.creator.odSocket;
-    if (otherPlayerSocket) {
-      const otherSocket = this.io.sockets.sockets.get(otherPlayerSocket);
-      if (otherSocket) {
-        otherSocket.emit('duel:rematchRequest', {
-          duelId,
-          fromPlayerId: userId,
-          fromPlayerName: userName,
-        });
-        console.log(`[DuelManager] Rematch request sent from ${userName} to opponent`);
-      }
+    // Find the other player's socket
+    const otherPlayerId = isCreator ? duelInfo.opponentId : duelInfo.creatorId;
+    const otherPlayerSocketId = isCreator ? duelInfo.opponentSocket : duelInfo.creatorSocket;
+
+    // Try to find socket by ID from cache, or by userId if cache is empty
+    let otherSocket: TypedSocket | null = null;
+    if (otherPlayerSocketId) {
+      otherSocket = this.io.sockets.sockets.get(otherPlayerSocketId) || null;
     }
+    
+    // If socket not found by ID, try to find by userId
+    if (!otherSocket && otherPlayerId) {
+      otherSocket = this.findSocketByUserId(otherPlayerId);
+    }
+
+    if (!otherSocket || !otherPlayerId) {
+      // #region agent log
+      debugLog('duel-manager.ts:handleRematchRequest', 'Opponent socket not found', { 
+        duelId, 
+        userId, 
+        otherPlayerId 
+      });
+      // #endregion
+      socket.emit('error', { code: 'OPPONENT_OFFLINE', message: 'Opponent is offline' });
+      return;
+    }
+
+    // Send rematch request to the other player
+    otherSocket.emit('duel:rematchRequest', {
+      duelId,
+      fromPlayerId: userId,
+      fromPlayerName: userName,
+    });
+
+    // #region agent log
+    debugLog('duel-manager.ts:handleRematchRequest', 'Rematch request sent', { 
+      duelId, 
+      fromUserId: userId, 
+      toUserId: otherPlayerId 
+    });
+    // #endregion
+
+    console.log(`[DuelManager] Rematch request sent from ${userName} (${userId}) to opponent (${otherPlayerId})`);
   }
 
   /**
    * Handle rematch accept
    */
   async handleRematchAccept(socket: TypedSocket, duelId: string): Promise<void> {
-    const state = this.duels.get(duelId);
-    if (!state) {
+    // #region agent log
+    debugLog('duel-manager.ts:handleRematchAccept', 'handleRematchAccept called', { 
+      duelId, 
+      userId: socket.data.userId 
+    });
+    // #endregion
+
+    const userId = socket.data.userId;
+
+    // Get duel state (cache or DB)
+    const duelInfo = await this.getDuelStateForRematch(duelId);
+    if (!duelInfo) {
+      // #region agent log
+      debugLog('duel-manager.ts:handleRematchAccept', 'Duel not found for rematch accept', { 
+        duelId, 
+        userId 
+      });
+      // #endregion
       socket.emit('error', { code: 'DUEL_NOT_FOUND', message: 'Duel not found' });
       return;
     }
 
-    const userId = socket.data.userId;
-    const isCreator = state.creator.odId === userId;
-    const isOpponent = state.opponent?.odId === userId;
+    // Verify user is part of this duel
+    const isCreator = duelInfo.creatorId === userId;
+    const isOpponent = duelInfo.opponentId === userId;
 
     if (!isCreator && !isOpponent) {
       socket.emit('error', { code: 'NOT_IN_DUEL', message: 'You are not part of this duel' });
       return;
     }
 
-    // Get the other player's socket
-    const otherPlayerSocket = isCreator ? state.opponent?.odSocket : state.creator.odSocket;
-    const otherPlayerId = isCreator ? state.opponent?.odId : state.creator.odId;
+    // Determine the other player
+    const otherPlayerId = isCreator ? duelInfo.opponentId : duelInfo.creatorId;
     
-    if (!otherPlayerSocket || !otherPlayerId) {
+    if (!otherPlayerId) {
       socket.emit('error', { code: 'OPPONENT_NOT_FOUND', message: 'Opponent not found' });
       return;
     }
 
-    // Create new duel via matchmaking manager (it has access to createMatch)
-    // For now, create directly
+    // The accepter is the current socket
+    const accepterSocket = socket;
+
+    // Find requester socket (the other player who requested rematch)
+    const requesterSocketId = isCreator ? duelInfo.opponentSocket : duelInfo.creatorSocket;
+    let requesterSocket: TypedSocket | null = null;
+    
+    if (requesterSocketId) {
+      requesterSocket = this.io.sockets.sockets.get(requesterSocketId) || null;
+    }
+    
+    // If socket not found by ID, try to find by userId
+    if (!requesterSocket) {
+      requesterSocket = this.findSocketByUserId(otherPlayerId);
+    }
+
+    // #region agent log
+    debugLog('duel-manager.ts:handleRematchAccept', 'Creating rematch duel', { 
+      duelId, 
+      accepterUserId: userId, 
+      requesterUserId: otherPlayerId, 
+      isRanked: duelInfo.isRanked, 
+      hasRequesterSocket: !!requesterSocket 
+    });
+    // #endregion
+
+    // Create new duel
     try {
       const newDuel = await prisma.duel.create({
         data: {
-          topic: state.topic,
-          questionsCount: state.questionsCount,
-          language: state.language,
+          topic: duelInfo.topic,
+          questionsCount: duelInfo.questionsCount,
+          language: duelInfo.language,
           difficulty: 'medium',
           status: 'pending',
-          isRanked: true, // Rematch from ranked is also ranked
-          creatorId: state.creator.odId,
+          isRanked: duelInfo.isRanked, // Preserve original duel's isRanked
+          creatorId: duelInfo.creatorId,
           opponentId: otherPlayerId,
         },
       });
 
-      console.log(`[DuelManager] Created rematch duel ${newDuel.id} for ${duelId}`);
+      console.log(`[DuelManager] Created rematch duel ${newDuel.id} for ${duelId} (isRanked: ${duelInfo.isRanked})`);
 
-      // Notify both players
-      const requesterSocket = this.io.sockets.sockets.get(isCreator ? state.creator.odSocket! : otherPlayerSocket);
-      const accepterSocket = this.io.sockets.sockets.get(otherPlayerSocket);
+      // Emit to accepter (current socket)
+      accepterSocket.emit('duel:rematchAccepted', {
+        oldDuelId: duelId,
+        newDuelId: newDuel.id,
+      });
 
+      // #region agent log
+      debugLog('duel-manager.ts:handleRematchAccept', 'Rematch accepted emitted to accepter', { 
+        duelId, 
+        newDuelId: newDuel.id, 
+        accepterUserId: userId 
+      });
+      // #endregion
+
+      // Emit to requester (other player) if socket exists
       if (requesterSocket) {
         requesterSocket.emit('duel:rematchAccepted', {
           oldDuelId: duelId,
           newDuelId: newDuel.id,
         });
-      }
 
-      if (accepterSocket) {
-        accepterSocket.emit('duel:rematchAccepted', {
-          oldDuelId: duelId,
-          newDuelId: newDuel.id,
+        // #region agent log
+        debugLog('duel-manager.ts:handleRematchAccept', 'Rematch accepted emitted to requester', { 
+          duelId, 
+          newDuelId: newDuel.id, 
+          requesterUserId: otherPlayerId 
         });
+        // #endregion
+      } else {
+        // #region agent log
+        debugLog('duel-manager.ts:handleRematchAccept', 'Requester socket not found, cannot notify', { 
+          duelId, 
+          requesterUserId: otherPlayerId 
+        });
+        // #endregion
+        console.log(`[DuelManager] Warning: Requester socket not found for rematch accept (userId: ${otherPlayerId})`);
       }
 
       console.log(`[DuelManager] Rematch accepted, new duel: ${newDuel.id}`);
@@ -1052,32 +1275,48 @@ export class DuelManager {
    * Handle rematch decline
    */
   async handleRematchDecline(socket: TypedSocket, duelId: string): Promise<void> {
-    const state = this.duels.get(duelId);
-    if (!state) {
+    const userId = socket.data.userId;
+
+    // Get duel state (cache or DB)
+    const duelInfo = await this.getDuelStateForRematch(duelId);
+    if (!duelInfo) {
       socket.emit('error', { code: 'DUEL_NOT_FOUND', message: 'Duel not found' });
       return;
     }
 
-    const userId = socket.data.userId;
-    const isCreator = state.creator.odId === userId;
-    const isOpponent = state.opponent?.odId === userId;
+    // Verify user is part of this duel
+    const isCreator = duelInfo.creatorId === userId;
+    const isOpponent = duelInfo.opponentId === userId;
 
     if (!isCreator && !isOpponent) {
       socket.emit('error', { code: 'NOT_IN_DUEL', message: 'You are not part of this duel' });
       return;
     }
 
-    // Notify the requester
-    const requesterSocketId = isCreator ? state.opponent?.odSocket : state.creator.odSocket;
+    // Find the requester (other player)
+    const requesterId = isCreator ? duelInfo.opponentId : duelInfo.creatorId;
+    const requesterSocketId = isCreator ? duelInfo.opponentSocket : duelInfo.creatorSocket;
+
+    // Try to find requester socket
+    let requesterSocket: TypedSocket | null = null;
     if (requesterSocketId) {
-      const requesterSocket = this.io.sockets.sockets.get(requesterSocketId);
-      if (requesterSocket) {
-        requesterSocket.emit('duel:rematchDeclined', {
-          duelId,
-          fromPlayerId: userId,
-        });
-        console.log(`[DuelManager] Rematch declined by ${userId}`);
-      }
+      requesterSocket = this.io.sockets.sockets.get(requesterSocketId) || null;
+    }
+    
+    // If socket not found by ID, try to find by userId
+    if (!requesterSocket && requesterId) {
+      requesterSocket = this.findSocketByUserId(requesterId);
+    }
+
+    // Notify the requester if socket exists
+    if (requesterSocket && requesterId) {
+      requesterSocket.emit('duel:rematchDeclined', {
+        duelId,
+        fromPlayerId: userId,
+      });
+      console.log(`[DuelManager] Rematch declined by ${userId}`);
+    } else {
+      console.log(`[DuelManager] Rematch declined by ${userId}, but requester socket not found`);
     }
   }
 }

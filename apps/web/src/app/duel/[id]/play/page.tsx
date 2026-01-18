@@ -128,16 +128,34 @@ export default function PlayPage() {
       );
     };
 
+    const handleError = (data: { code: string; message: string }) => {
+      if (data.code === 'OPPONENT_OFFLINE') {
+        setIsCreatingRematch(false);
+        addToast(
+          language === 'ru' ? 'Соперник офлайн' : 'Opponent is offline',
+          'error'
+        );
+      } else if (data.code === 'DUEL_NOT_FOUND' && isCreatingRematch) {
+        setIsCreatingRematch(false);
+        addToast(
+          language === 'ru' ? 'Дуэль не найдена' : 'Duel not found',
+          'error'
+        );
+      }
+    };
+
     socket.on('duel:rematchRequest', handleRematchRequest);
     socket.on('duel:rematchAccepted', handleRematchAccepted);
     socket.on('duel:rematchDeclined', handleRematchDeclined);
+    socket.on('error', handleError);
 
     return () => {
       socket.off('duel:rematchRequest', handleRematchRequest);
       socket.off('duel:rematchAccepted', handleRematchAccepted);
       socket.off('duel:rematchDeclined', handleRematchDeclined);
+      socket.off('error', handleError);
     };
-  }, [socket, router, language, addToast]);
+  }, [socket, router, language, addToast, isCreatingRematch]);
 
   // Reset state when question changes
   useEffect(() => {
