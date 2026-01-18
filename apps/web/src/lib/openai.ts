@@ -210,48 +210,90 @@ export async function generateQuestions(
   language: Language,
   difficulty: DifficultyLevel
 ): Promise<GeneratedPack> {
-  const response = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
-    messages: [
-      { role: 'system', content: getSystemPrompt(language, difficulty) },
-      { role: 'user', content: getUserPrompt(topic, count, language, difficulty) },
-    ],
-    response_format: { type: 'json_object' },
-    temperature: 0.8,
-    max_tokens: 4000,
-  });
+  // Retry logic for language validation
+  const MAX_RETRIES = 1;
+  let attempt = 0;
+  let lastError: Error | null = null;
 
-  const content = response.choices[0]?.message?.content;
-  if (!content) {
-    throw new Error('Empty response from OpenAI');
+  while (attempt <= MAX_RETRIES) {
+    try {
+      const response = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: getSystemPrompt(language, difficulty) },
+          { role: 'user', content: getUserPrompt(topic, count, language, difficulty) },
+        ],
+        response_format: { type: 'json_object' },
+        temperature: 0.8,
+        max_tokens: 4000,
+      });
+
+      const content = response.choices[0]?.message?.content;
+      if (!content) {
+        throw new Error('Empty response from OpenAI');
+      }
+
+      // Parse and validate response
+      const parsed = JSON.parse(content);
+      const validated = OpenAIResponseSchema.parse(parsed);
+
+      // Validate language for all questions
+      for (let i = 0; i < validated.questions.length; i++) {
+        const q = validated.questions[i];
+        if (!validateLanguage(q.text, q.options, language)) {
+          throw new Error(`[LANGUAGE_MISMATCH] Question at index ${i} has language mismatch`);
+        }
+      }
+
+      // All questions validated successfully
+      console.log(`[OpenAI] Successfully generated and validated ${validated.questions.length} questions in ${language}`);
+
+      // Generate unique IDs and seed
+      const seed = crypto.randomBytes(32).toString('hex');
+      
+      const questions: QuestionWithAnswer[] = validated.questions.map((q, index) => ({
+        id: `q-${crypto.randomUUID()}`,
+        text: q.text,
+        options: q.options,
+        correctIndex: q.correctIndex,
+        imageSearchQuery: q.imageSearchQuery ?? null,
+        imageUrl: null, // MVP: no image resolution
+      }));
+
+      // Create commit hash for anti-cheat verification
+      const answersString = questions.map(q => q.correctIndex).join(',');
+      const commitHash = crypto
+        .createHash('sha256')
+        .update(seed + answersString)
+        .digest('hex');
+
+      return {
+        questions,
+        seed,
+        commitHash,
+      };
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      
+      // Check if it's a language mismatch error
+      if (lastError.message.includes('[LANGUAGE_MISMATCH]')) {
+        if (attempt < MAX_RETRIES) {
+          attempt++;
+          console.log(`[OpenAI] Language mismatch detected, retrying (attempt ${attempt}/${MAX_RETRIES})...`);
+          // Add a small delay before retry
+          await new Promise(resolve => setTimeout(resolve, 500));
+          continue;
+        } else {
+          console.error(`[OpenAI] Language validation failed after ${MAX_RETRIES + 1} attempts`);
+          throw new Error(`Failed to generate questions in ${language} after ${MAX_RETRIES + 1} attempts. Language mismatch detected.`);
+        }
+      } else {
+        // Other errors - throw immediately
+        throw lastError;
+      }
+    }
   }
 
-  // Parse and validate response
-  const parsed = JSON.parse(content);
-  const validated = OpenAIResponseSchema.parse(parsed);
-
-  // Generate unique IDs and seed
-  const seed = crypto.randomBytes(32).toString('hex');
-  
-  const questions: QuestionWithAnswer[] = validated.questions.map((q, index) => ({
-    id: `q-${crypto.randomUUID()}`,
-    text: q.text,
-    options: q.options,
-    correctIndex: q.correctIndex,
-    imageSearchQuery: q.imageSearchQuery ?? null,
-    imageUrl: null, // MVP: no image resolution
-  }));
-
-  // Create commit hash for anti-cheat verification
-  const answersString = questions.map(q => q.correctIndex).join(',');
-  const commitHash = crypto
-    .createHash('sha256')
-    .update(seed + answersString)
-    .digest('hex');
-
-  return {
-    questions,
-    seed,
-    commitHash,
-  };
+  // Should never reach here, but TypeScript needs it
+  throw lastError || new Error('Unknown error in question generation');
 }
