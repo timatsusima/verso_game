@@ -10,6 +10,7 @@ import { Card } from '@/components/ui/card';
 import { DuelLoadingOverlay } from '@/components/game/duel-loading-overlay';
 import { RatingDisplay } from '@/components/game/rating-display';
 import { useTranslations } from '@/hooks/use-translations';
+import { api, ApiClientError } from '@/lib/api-client';
 import type { Language, DifficultyLevel } from '@tg-duel/shared';
 
 function LoadingSpinner() {
@@ -38,6 +39,8 @@ function HomePageContent() {
     isAuthenticated, 
     token, 
     firstName,
+    authReady,
+    authError,
     setAuth, 
     setLanguage 
   } = useAuthStore();
@@ -83,116 +86,31 @@ function HomePageContent() {
     }
   }, [isAuthenticated, token, redirectUrl, devParam, router]);
 
-  // Authenticate with Telegram on mount
+  // Wait for auth bootstrap to complete
   useEffect(() => {
-    const authenticate = async () => {
-      // Check if already authenticated
-      if (isAuthenticated && token) {
-        setIsAuthenticating(false);
-        return;
-      }
-
-      try {
-        // Get initData from Telegram WebApp
-        let initData = '';
-        
-        if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
-          initData = window.Telegram.WebApp.initData;
+    if (authReady) {
+      setIsAuthenticating(false);
+      
+      // Call ready() and expand() if available
+      if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
+        try {
           window.Telegram.WebApp.ready();
           window.Telegram.WebApp.expand();
+        } catch (e) {
+          // Ignore errors
         }
-
-        // For development without Telegram
-        if (!initData && process.env.NODE_ENV === 'development') {
-          // Use URL param ?dev=2 to create second test user
-          const devUserId = devParam === '2' ? 987654321 : 123456789;
-          const devUserName = devParam === '2' ? 'Player2' : 'Dev';
-          
-          initData = 'dev:' + JSON.stringify({
-            id: devUserId,
-            first_name: devUserName,
-            last_name: 'User',
-            username: devUserName.toLowerCase(),
-            language_code: 'ru',
-          });
-        }
-
-        if (!initData) {
-          setShowLanguageSelect(true);
-          setIsAuthenticating(false);
-          return;
-        }
-
-        const response = await fetch('/api/auth/telegram', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ initData }),
-        });
-
-        if (!response.ok) {
-          throw new Error('Authentication failed');
-        }
-
-        const data = await response.json();
-        
-        setAuth({
-          token: data.token,
-          userId: data.user.id,
-          telegramId: data.user.telegramId,
-          username: data.user.username,
-          firstName: data.user.firstName,
-          language: data.user.language,
-        });
-      } catch (err) {
-        console.error('Auth error:', err);
-        setShowLanguageSelect(true);
-      } finally {
-        setIsAuthenticating(false);
       }
-    };
-
-    authenticate();
-  }, [isAuthenticated, token, setAuth]);
+    }
+  }, [authReady]);
 
   const handleLanguageSelect = async (lang: Language) => {
     setLanguage(lang);
     setShowLanguageSelect(false);
-    
-    // Try to authenticate with Telegram after language selection
-    if (!isAuthenticated) {
-      setIsAuthenticating(true);
-      try {
-        let initData = '';
-        
-        if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
-          initData = window.Telegram.WebApp.initData;
-        }
-        
-        if (initData) {
-          const response = await fetch('/api/auth/telegram', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ initData }),
-          });
+  };
 
-          if (response.ok) {
-            const data = await response.json();
-            setAuth({
-              token: data.token,
-              userId: data.user.id,
-              telegramId: data.user.telegramId,
-              username: data.user.username,
-              firstName: data.user.firstName,
-              language: lang,
-            });
-          }
-        }
-      } catch (err) {
-        console.error('Auth error after language select:', err);
-      } finally {
-        setIsAuthenticating(false);
-      }
-    }
+  const handleRetryAuth = () => {
+    // Reload page to trigger bootstrap again
+    window.location.reload();
   };
 
   const handleCreateDuel = async () => {
@@ -206,56 +124,12 @@ function HomePageContent() {
     setError(null);
 
     try {
-      // If not authenticated, try to authenticate first
-      let authToken = token;
-      
-      if (!authToken && typeof window !== 'undefined' && window.Telegram?.WebApp?.initData) {
-        const authResponse = await fetch('/api/auth/telegram', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ initData: window.Telegram.WebApp.initData }),
-        });
-
-        if (authResponse.ok) {
-          const authData = await authResponse.json();
-          authToken = authData.token;
-          setAuth({
-            token: authData.token,
-            userId: authData.user.id,
-            telegramId: authData.user.telegramId,
-            username: authData.user.username,
-            firstName: authData.user.firstName,
-            language: language,
-          });
-        } else {
-          throw new Error(language === 'ru' ? 'Ошибка авторизации' : 'Authentication failed');
-        }
-      }
-
-      if (!authToken) {
-        throw new Error(language === 'ru' ? 'Необходима авторизация через Telegram' : 'Telegram authorization required');
-      }
-
-      const response = await fetch('/api/duel/create', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authToken}`,
-        },
-        body: JSON.stringify({
-          topic: topic.trim(),
-          questionsCount,
-          language,
-          difficulty,
-        }),
+      const data = await api.post<{ duelId: string; inviteLink: string }>('/api/duel/create', {
+        topic: topic.trim(),
+        questionsCount,
+        language,
+        difficulty,
       });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to create duel');
-      }
-
-      const data = await response.json();
       
       // Mark loading as complete to animate progress to 100%
       setIsLoadingComplete(true);
@@ -265,20 +139,53 @@ function HomePageContent() {
         router.push(`/duel/${data.duelId}/invite`);
       }, 500);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create duel');
+      // Show user-friendly error message
+      if (err instanceof ApiClientError) {
+        setError(err.userMessage);
+      } else {
+        setError(
+          err instanceof Error 
+            ? err.message 
+            : (language === 'ru' ? 'Не удалось создать дуэль' : 'Failed to create duel')
+        );
+      }
       setIsLoading(false);
       setIsLoadingComplete(false);
     }
   };
 
-  // Loading state
-  if (isAuthenticating) {
+  // Loading state: waiting for auth bootstrap
+  if (!authReady && !authError) {
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="text-center">
           <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
           <p className="text-tg-text-secondary">{t('loading')}</p>
         </div>
+      </div>
+    );
+  }
+
+  // Auth error state
+  if (authError) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-6">
+        <Card variant="glass" className="w-full max-w-sm animate-scale-in">
+          <h1 className="text-2xl font-bold text-center mb-4">
+            🎯 Duel Quiz
+          </h1>
+          <p className="text-tg-text-secondary text-center mb-6">
+            {authError}
+          </p>
+          <Button
+            fullWidth
+            size="lg"
+            variant="primary"
+            onClick={handleRetryAuth}
+          >
+            {language === 'ru' ? 'Повторить' : 'Retry'}
+          </Button>
+        </Card>
       </div>
     );
   }
@@ -340,8 +247,8 @@ function HomePageContent() {
         </p>
       </div>
 
-      {/* Rating Display */}
-      {isAuthenticated && (
+      {/* Rating Display - only show if authReady and authenticated */}
+      {authReady && isAuthenticated && (
         <div className="mb-6">
           <RatingDisplay language={language} />
         </div>
@@ -395,8 +302,10 @@ function HomePageContent() {
             label={t('topic')}
             placeholder={t('topicPlaceholder')}
             value={topic}
-            onChange={(e) => setTopic(e.target.value)}
-            error={error || undefined}
+            onChange={(e) => {
+              setTopic(e.target.value);
+              if (error) setError(null);
+            }}
           />
 
           {/* Questions Count */}
@@ -423,6 +332,13 @@ function HomePageContent() {
             onChange={(v) => setDifficulty(v as DifficultyLevel)}
           />
 
+          {/* Error Message */}
+          {error && (
+            <div className="p-3 bg-red-500/20 border border-red-500/30 rounded-lg text-sm text-red-300">
+              {error}
+            </div>
+          )}
+
           {/* Create Button */}
           <Button
             fullWidth
@@ -431,14 +347,17 @@ function HomePageContent() {
             isLoading={isLoading}
             disabled={!topic.trim()}
           >
-            {t('start')} 🚀
+            {error ? (language === 'ru' ? 'Повторить' : 'Retry') : t('start')} 🚀
           </Button>
           
           {/* Back to mode selection */}
           <Button
             fullWidth
             variant="ghost"
-            onClick={() => setShowCreateForm(false)}
+            onClick={() => {
+              setShowCreateForm(false);
+              setError(null);
+            }}
             className="mt-2"
           >
             {language === 'ru' ? '← Назад' : '← Back'}

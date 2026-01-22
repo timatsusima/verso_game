@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import { Analytics } from '@vercel/analytics/react';
+import { AuthCleanup } from '@/components/auth/auth-cleanup';
+import { AuthBootstrap } from '@/components/auth/auth-bootstrap';
 import './globals.css';
 
 const inter = Inter({ subsets: ['latin', 'cyrillic'] });
@@ -29,6 +31,8 @@ export default function RootLayout({
         <script src="https://telegram.org/js/telegram-web-app.js" />
       </head>
       <body className={`${inter.className} bg-pattern safe-area-top safe-area-bottom`}>
+        <AuthCleanup />
+        <AuthBootstrap />
         <main className="min-h-screen flex flex-col">
           {children}
         </main>

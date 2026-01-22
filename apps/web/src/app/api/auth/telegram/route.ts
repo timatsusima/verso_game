@@ -5,28 +5,64 @@ import { AuthTelegramSchema } from '@tg-duel/shared';
 import type { Language } from '@tg-duel/shared';
 
 export async function POST(request: NextRequest) {
+  const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
+  const hasBotToken = !!TELEGRAM_BOT_TOKEN;
+
   try {
     const body = await request.json();
     
     // Validate request body
     const parsed = AuthTelegramSchema.safeParse(body);
     if (!parsed.success) {
+      console.log('[Auth] Invalid request body');
       return NextResponse.json(
-        { error: 'Invalid request body', details: parsed.error.errors },
+        { ok: false, code: 'INVALID_REQUEST', error: 'Invalid request body' },
         { status: 400 }
       );
     }
 
     const { initData } = parsed.data;
 
-    console.log('Auth attempt, initData length:', initData?.length);
+    console.log('[Auth] Auth attempt, initData length:', initData?.length, 'hasBotToken:', hasBotToken);
+
+    // Check if initData is expired (before validation)
+    let isExpired = false;
+    let authDateDiff = null;
+    if (initData && !initData.startsWith('dev:')) {
+      try {
+        const urlParams = new URLSearchParams(initData);
+        const authDate = urlParams.get('auth_date');
+        if (authDate) {
+          const authTimestamp = parseInt(authDate, 10);
+          const now = Math.floor(Date.now() / 1000);
+          authDateDiff = now - authTimestamp;
+          if (authDateDiff > 86400) { // 24 hours
+            isExpired = true;
+            console.log('[Auth] InitData expired, diff:', authDateDiff, 'seconds');
+          } else {
+            console.log('[Auth] InitData auth_date diff:', authDateDiff, 'seconds (valid)');
+          }
+        }
+      } catch (e) {
+        console.log('[Auth] Failed to parse auth_date');
+      }
+    }
 
     // Validate Telegram initData
     const telegramUser = validateInitData(initData);
     if (!telegramUser) {
-      console.error('Auth failed: validateInitData returned null');
+      console.error('[Auth] validateInitData returned null, isExpired:', isExpired, 'authDateDiff:', authDateDiff);
+      
+      // Return specific error code if initData expired
+      if (isExpired) {
+        return NextResponse.json(
+          { ok: false, code: 'INITDATA_EXPIRED', error: 'InitData expired' },
+          { status: 401 }
+        );
+      }
+      
       return NextResponse.json(
-        { error: 'Invalid or expired initData' },
+        { ok: false, code: 'INITDATA_INVALID', error: 'InitData invalid' },
         { status: 401 }
       );
     }
@@ -75,6 +111,7 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({
+      ok: true,
       token,
       user: {
         id: user.id,
@@ -85,9 +122,9 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Auth error:', error);
+    console.error('[Auth] Server error:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { ok: false, code: 'SERVER_ERROR', error: 'Internal server error' },
       { status: 500 }
     );
   }

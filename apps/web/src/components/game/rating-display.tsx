@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
+import { api, ApiClientError } from '@/lib/api-client';
 
 interface RatingData {
   sr: number;
@@ -66,41 +67,48 @@ const TRANSLATIONS = {
 };
 
 export function RatingDisplay({ language, className }: RatingDisplayProps) {
-  const { token, userId } = useAuthStore();
+  const { isAuthenticated, authReady } = useAuthStore();
   const [rating, setRating] = useState<RatingData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const t = TRANSLATIONS[language];
 
   useEffect(() => {
-    if (!token || !userId) {
+    // Ждём authReady перед загрузкой рейтинга
+    if (!authReady || !isAuthenticated) {
       setIsLoading(false);
       return;
     }
 
     const fetchRating = async () => {
       try {
-        const response = await fetch('/api/rating', {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          setRating(data);
-        }
+        setIsLoading(true);
+        setError(null);
+        const data = await api.get<RatingData>('/api/rating');
+        setRating(data);
       } catch (error) {
         console.error('Failed to fetch rating:', error);
+        
+        // Show user-friendly error message
+        if (error instanceof ApiClientError) {
+          setError(error.userMessage);
+        } else {
+          setError(
+            language === 'ru'
+              ? 'Не удалось загрузить рейтинг'
+              : 'Failed to load rating'
+          );
+        }
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchRating();
-  }, [token, userId]);
+  }, [authReady, isAuthenticated, language]);
 
-  if (isLoading || !rating) {
+  if (isLoading) {
     return (
       <Card variant="glass" className={cn('p-4', className)}>
         <div className="flex items-center justify-between">
@@ -108,6 +116,21 @@ export function RatingDisplay({ language, className }: RatingDisplayProps) {
             {t.yourRating}
           </div>
           <div className="w-16 h-4 bg-white/10 rounded animate-pulse" />
+        </div>
+      </Card>
+    );
+  }
+
+  if (error || !rating) {
+    return (
+      <Card variant="glass" className={cn('p-4', className)}>
+        <div className="flex items-center justify-between">
+          <div className="text-sm text-tg-text-secondary">
+            {t.yourRating}
+          </div>
+          <div className="text-xs text-tg-text-secondary">
+            {error || (language === 'ru' ? 'Не удалось загрузить' : 'Failed to load')}
+          </div>
         </div>
       </Card>
     );
