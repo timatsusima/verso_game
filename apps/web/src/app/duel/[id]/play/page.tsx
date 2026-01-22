@@ -88,7 +88,6 @@ export default function PlayPage() {
   // SINGLE SOURCE OF TRUTH: только rematchState и rematchNewDuelId
   const [rematchState, setRematchState] = useState<'idle' | 'pending' | 'accepted'>('idle');
   const [rematchNewDuelId, setRematchNewDuelId] = useState<string | null>(null);
-  const [isCreatingUnrankedRematch, setIsCreatingUnrankedRematch] = useState(false); // Loading state for unranked rematch
   
   // Toasts
   const { toasts, addToast, removeToast, clearToasts } = useDuelToasts();
@@ -459,11 +458,8 @@ export default function PlayPage() {
   };
 
   const handleRematch = async (sameTopic: boolean) => {
-    // Prevent double clicks
-    if (rematchState !== 'idle' || isCreatingUnrankedRematch) {
-      console.log('[Rematch] Blocked: rematchState=', rematchState, 'isCreatingUnrankedRematch=', isCreatingUnrankedRematch);
-      return;
-    }
+    // Prevent double clicks - проверяем по rematchState
+    if (rematchState !== 'idle') return;
 
     // For ranked/matchmaking duels, use Socket.IO rematch
     if (isRanked) {
@@ -516,28 +512,15 @@ export default function PlayPage() {
       return;
     }
 
-    // For unranked/invite duels, create new duel via API
-    console.log('[Rematch] Creating unranked rematch, sameTopic:', sameTopic, 'currentTopic:', topic);
-    
-    // Prevent double clicks
-    setIsCreatingUnrankedRematch(true);
-    
-    // Instant feedback: vibrate
+    // For invite duels, create new duel via API
+    // Instant feedback: vibrate and set loading state
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
       navigator.vibrate(10);
     }
     
+    // For invite duels, we don't use rematchState (it's only for ranked/matchmaking)
+    // Just show loading via API call
     try {
-      // Use current topic if sameTopic is true, otherwise use empty string (will be set on invite page)
-      const rematchTopic = sameTopic && topic ? topic : topic || '';
-      
-      console.log('[Rematch] Calling /api/duel/create with:', {
-        topic: rematchTopic,
-        questionsCount: totalQuestions || 10,
-        language: language,
-        difficulty: 'medium',
-      });
-      
       const response = await fetch('/api/duel/create', {
         method: 'POST',
         headers: {
@@ -545,7 +528,7 @@ export default function PlayPage() {
           'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
-          topic: rematchTopic,
+          topic: sameTopic ? topic : topic,
           questionsCount: totalQuestions || 10,
           language: language,
           difficulty: 'medium',
@@ -553,19 +536,15 @@ export default function PlayPage() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        console.error('[Rematch] API error:', response.status, errorData);
-        throw new Error(errorData.error || `HTTP ${response.status}: Failed to create rematch`);
+        throw new Error('Failed to create rematch');
       }
 
       const data = await response.json();
-      console.log('[Rematch] Created new duel:', data.duelId);
       
       // Redirect to invite page
       router.push(`/duel/${data.duelId}/invite`);
     } catch (err) {
-      console.error('[Rematch] Error creating unranked rematch:', err);
-      setIsCreatingUnrankedRematch(false);
+      console.error('Rematch error:', err);
       addToast(
         language === 'ru' ? 'Ошибка при создании реванша' : 'Error creating rematch',
         'danger'
@@ -757,7 +736,7 @@ export default function PlayPage() {
             reset();
             router.push('/');
           }}
-          isLoadingRematch={rematchState !== 'idle' || isCreatingUnrankedRematch}
+          isLoadingRematch={rematchState !== 'idle'}
           rating={ratingData || undefined}
           isRanked={isRanked || finalResult?.isRanked || false}
         />
