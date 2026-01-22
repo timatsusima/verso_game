@@ -221,15 +221,15 @@ export async function apiClient<T = unknown>(
     const authStore = useAuthStore.getState();
     let userMessage = errorData.error || `Request failed with status ${response.status}`;
     
-    if (errorData.code === 'INITDATA_EXPIRED') {
+    if (errorData.code === 'EXPIRED_INITDATA') {
       userMessage = authStore.language === 'ru'
         ? 'Сессия устарела. Закройте и откройте мини-приложение в Telegram.'
         : 'Session expired. Please close and reopen the mini app in Telegram.';
-    } else if (errorData.code === 'INITDATA_INVALID') {
+    } else if (errorData.code === 'INVALID_INITDATA') {
       userMessage = authStore.language === 'ru'
         ? 'Ошибка авторизации Telegram. Откройте мини-приложение заново.'
         : 'Telegram authorization error. Please reopen the mini app.';
-    } else if (errorData.code === 'SERVER_ERROR' || errorData.code?.startsWith('DB_')) {
+    } else if (errorData.code === 'DB_COLD_START' || errorData.code === 'DB_UNAVAILABLE') {
       userMessage = authStore.language === 'ru'
         ? 'Сервер недоступен, попробуйте ещё раз.'
         : 'Server unavailable, please try again.';

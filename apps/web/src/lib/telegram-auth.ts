@@ -72,7 +72,7 @@ export async function reauthWithTelegram(): Promise<{
 
   if (!response.ok || !data.ok) {
     // Check if initData expired
-    if (data.code === 'INITDATA_EXPIRED' || data.code === 'EXPIRED_INITDATA') {
+    if (data.code === 'EXPIRED_INITDATA') {
       throw new Error('EXPIRED_INITDATA');
     }
     

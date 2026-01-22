@@ -50,11 +50,11 @@ export function AuthBootstrap() {
           console.error('[AuthBootstrap] Auth failed:', code, data.error);
 
           let errorMessage = 'Ошибка авторизации';
-          if (code === 'INITDATA_EXPIRED') {
+          if (code === 'EXPIRED_INITDATA') {
             errorMessage = 'Сессия устарела. Закройте и откройте мини-приложение в Telegram.';
-          } else if (code === 'INITDATA_INVALID') {
+          } else if (code === 'INVALID_INITDATA') {
             errorMessage = 'Ошибка авторизации Telegram. Откройте мини-приложение заново.';
-          } else if (code === 'SERVER_ERROR') {
+          } else if (code === 'DB_COLD_START' || code === 'DB_UNAVAILABLE') {
             errorMessage = 'Сервер недоступен, попробуйте ещё раз.';
           }
 

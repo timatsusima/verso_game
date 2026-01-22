@@ -56,13 +56,13 @@ export async function POST(request: NextRequest) {
       // Return specific error code if initData expired
       if (isExpired) {
         return NextResponse.json(
-          { ok: false, code: 'INITDATA_EXPIRED', error: 'InitData expired' },
+          { ok: false, code: 'EXPIRED_INITDATA', error: 'InitData expired' },
           { status: 401 }
         );
       }
       
       return NextResponse.json(
-        { ok: false, code: 'INITDATA_INVALID', error: 'InitData invalid' },
+        { ok: false, code: 'INVALID_INITDATA', error: 'InitData invalid' },
         { status: 401 }
       );
     }
