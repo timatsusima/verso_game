@@ -142,33 +142,42 @@ model UserRating {
   userId       String   @unique
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
-  // Elo-like rating
   sr           Int      @default(1000) // Skill Rating (0-30000)
   rd           Int      @default(350)  // Rating Deviation (80-350)
-  
-  // Statistics
   gamesPlayed  Int      @default(0)
   
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  @@index([userId])
   @@index([sr])
+  @@index([gamesPlayed])
 }
 
 model MatchResult {
-  id            String   @id @default(cuid())
-  duelId        String   @unique
-  duel          Duel     @relation(fields: [duelId], references: [id], onDelete: Cascade)
+  id              String   @id @default(cuid())
+  duelId          String   @unique
+  duel            Duel     @relation(fields: [duelId], references: [id], onDelete: Cascade)
   
-  // Rating changes
-  creatorDelta  Int      // SR change for creator
-  opponentDelta Int?     // SR change for opponent (null if no opponent)
+  isRanked        Boolean  @default(false)
+  topicNorm       String
   
-  // Match stats
-  isRanked      Boolean  @default(false)
+  totalQuestions  Int
   
-  createdAt     DateTime @default(now())
+  // Creator stats
+  creatorCorrectCount  Int
+  creatorFasterCount   Int
+  creatorSrBefore      Int
+  creatorSrAfter       Int
+  creatorDelta         Int
+  
+  // Opponent stats
+  opponentCorrectCount Int
+  opponentFasterCount  Int
+  opponentSrBefore     Int
+  opponentSrAfter      Int
+  opponentDelta        Int
+  
+  createdAt       DateTime @default(now())
 
   @@index([duelId])
   @@index([isRanked])
