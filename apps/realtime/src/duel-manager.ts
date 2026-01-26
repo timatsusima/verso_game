@@ -988,6 +988,8 @@ export class DuelManager {
     opponentId: string | null;
     creatorSocket: string | null;
     opponentSocket: string | null;
+    creatorName: string | null;
+    opponentName: string | null;
   } | null> {
     // #region agent log
     debugLog('duel-manager.ts:getDuelStateForRematch', 'getDuelStateForRematch called', { duelId });
@@ -1009,6 +1011,8 @@ export class DuelManager {
         opponentId: cachedState.opponent?.odId ?? null,
         creatorSocket: cachedState.creator.odSocket,
         opponentSocket: cachedState.opponent?.odSocket ?? null,
+        creatorName: cachedState.creator.odName,
+        opponentName: cachedState.opponent?.odName ?? null,
       };
     }
 
@@ -1016,7 +1020,7 @@ export class DuelManager {
     debugLog('duel-manager.ts:getDuelStateForRematch', 'Cache miss, loading from DB', { duelId });
     // #endregion
 
-    // Load from DB
+    // Load from DB with user names
     const duel = await prisma.duel.findUnique({
       where: { id: duelId },
       select: {
@@ -1027,6 +1031,16 @@ export class DuelManager {
         isRanked: true,
         creatorId: true,
         opponentId: true,
+        creator: {
+          select: {
+            firstName: true,
+          },
+        },
+        opponent: {
+          select: {
+            firstName: true,
+          },
+        },
       },
     });
 
@@ -1058,6 +1072,8 @@ export class DuelManager {
       opponentId: duel.opponentId,
       creatorSocket: creatorSocket?.id ?? null,
       opponentSocket: opponentSocket?.id ?? null,
+      creatorName: duel.creator.firstName,
+      opponentName: duel.opponent?.firstName ?? null,
     };
   }
 
@@ -1261,6 +1277,42 @@ export class DuelManager {
       });
 
       console.log(`[DuelManager] Created rematch duel ${newDuel.id} for ${duelId} (isRanked: ${duelInfo.isRanked})`);
+
+      // Initialize game state for the new duel
+      // IMPORTANT: Create state before emitting events so when players join they find existing state
+      const newState: DuelState = {
+        duelId: newDuel.id,
+        topic: duelInfo.topic,
+        language: duelInfo.language,
+        questionsCount: duelInfo.questionsCount,
+        status: 'pending',
+        questions: [], // Will be generated when both players join
+        seed: '',
+        commitHash: '',
+        creator: {
+          odId: duelInfo.creatorId,
+          odName: duelInfo.creatorName || 'Player 1',
+          odSocket: null, // Will be set when they join
+          score: 0,
+          answers: new Map(),
+        },
+        opponent: {
+          odId: otherPlayerId,
+          odName: duelInfo.opponentName || 'Player 2',
+          odSocket: null, // Will be set when they join
+          score: 0,
+          answers: new Map(),
+        },
+        currentQuestionIndex: -1, // Not started yet
+        questionStartTime: 0,
+        timerInterval: null,
+        isLocked: false,
+        lockTime: null,
+        firstAnswerPlayerId: null,
+      };
+      
+      this.duels.set(newDuel.id, newState);
+      console.log(`[DuelManager] Initialized state for rematch duel ${newDuel.id}`);
 
       // Emit to accepter (current socket)
       accepterSocket.emit('duel:rematchAccepted', {
