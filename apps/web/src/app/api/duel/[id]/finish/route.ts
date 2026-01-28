@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { processMatchRating } from '@/lib/rating';
+import { incrementDailyDuelCounter } from '@/lib/analytics';
 import type { QuestionResult } from '@tg-duel/shared';
 
 export async function POST(
@@ -141,6 +142,17 @@ export async function POST(
     const opponentLeague = ratingData
       ? getLeagueName(ratingData.opponent.srAfter)
       : null;
+
+    // Analytics: increment daily duel counter for both players
+    // Do this asynchronously, don't await to not block response
+    incrementDailyDuelCounter(duel.creatorId).catch(err => 
+      console.error('[Analytics] Failed to increment creator counter:', err)
+    );
+    if (duel.opponentId) {
+      incrementDailyDuelCounter(duel.opponentId).catch(err =>
+        console.error('[Analytics] Failed to increment opponent counter:', err)
+      );
+    }
 
     return NextResponse.json({
       success: true,
