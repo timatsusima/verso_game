@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getOrGenerateQuestions } from '@/lib/question-bank';
+import { getOrGenerateQuestions, getMatchmakingQuestions } from '@/lib/question-bank';
 
 export async function POST(
   request: NextRequest,
@@ -28,12 +28,25 @@ export async function POST(
     }
 
     // Generate questions
-    const pack = await getOrGenerateQuestions(
-      duel.topic,
-      duel.questionsCount as 10 | 20 | 30,
-      duel.language as 'ru' | 'en',
-      duel.difficulty as 'easy' | 'medium' | 'hard'
-    );
+    let pack;
+    
+    if (duel.isRanked) {
+      // Matchmaking: use diverse questions, no easy difficulty
+      console.log(`[GenerateQuestions] Matchmaking duel ${duelId}, using getMatchmakingQuestions`);
+      pack = await getMatchmakingQuestions(
+        duel.questionsCount as 10 | 20 | 30,
+        duel.language as 'ru' | 'en'
+      );
+    } else {
+      // Regular duel: use topic-specific questions
+      console.log(`[GenerateQuestions] Regular duel ${duelId}, using getOrGenerateQuestions`);
+      pack = await getOrGenerateQuestions(
+        duel.topic,
+        duel.questionsCount as 10 | 20 | 30,
+        duel.language as 'ru' | 'en',
+        duel.difficulty as 'easy' | 'medium' | 'hard'
+      );
+    }
 
     // Create pack
     await prisma.duelPack.create({

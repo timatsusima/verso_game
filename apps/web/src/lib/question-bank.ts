@@ -465,6 +465,174 @@ export interface GeneratedPack {
   stats: {
     fromCache: number;
     newlyGenerated: number;
+    difficultyDistribution?: Record<string, number>;
+    topicDistribution?: Record<string, number>;
+  };
+}
+
+/**
+ * Get questions for matchmaking with strict constraints:
+ * - No 'easy' difficulty questions
+ * - Maximum 1 question per subtopic (topicCap=1)
+ * - Questions from diverse topics (subtopics)
+ * - Random shuffle for fairness
+ */
+export async function getMatchmakingQuestions(
+  count: 10 | 20 | 30,
+  language: Language
+): Promise<GeneratedPack> {
+  console.log(`[QuestionBank] Matchmaking request: ${count} questions (${language})`);
+
+  const rotationDate = new Date();
+  rotationDate.setDate(rotationDate.getDate() - ROTATION_DAYS);
+
+  // Step 1: Get all available questions (medium + hard only)
+  const availableQuestions = await prisma.questionBank.findMany({
+    where: {
+      language,
+      difficulty: {
+        in: ['medium', 'hard'],
+      },
+      isActive: true,
+      OR: [
+        { lastServedAt: null },
+        { lastServedAt: { lt: rotationDate } },
+      ],
+    },
+    orderBy: [
+      { lastServedAt: 'asc' },
+      { timesServed: 'asc' },
+    ],
+    // Get more than needed to ensure diversity after filtering
+    take: count * 5,
+  });
+
+  console.log(`[QuestionBank] Found ${availableQuestions.length} available questions (medium+hard)`);
+
+  if (availableQuestions.length === 0) {
+    throw new Error('No questions available for matchmaking (medium+hard)');
+  }
+
+  // Step 2: Map subtopic (null -> 'general')
+  const questionsWithTopic = availableQuestions.map(q => ({
+    ...q,
+    effectiveTopic: q.subtopic || 'general',
+  }));
+
+  // Step 3: Apply topicCap=1 constraint
+  const topicCounts = new Map<string, number>();
+  const selected: typeof questionsWithTopic = [];
+
+  // Shuffle first for randomness
+  const shuffled = shuffleArray(questionsWithTopic);
+
+  for (const q of shuffled) {
+    const currentCount = topicCounts.get(q.effectiveTopic) || 0;
+    
+    if (currentCount < 1) {
+      selected.push(q);
+      topicCounts.set(q.effectiveTopic, currentCount + 1);
+      
+      if (selected.length === count) {
+        break;
+      }
+    }
+  }
+
+  console.log(`[QuestionBank] After topicCap=1 filter: ${selected.length} questions`);
+
+  // Step 4: Fallback if not enough questions
+  if (selected.length < count) {
+    console.warn(`[QuestionBank] Not enough diverse questions (${selected.length}/${count}), relaxing topicCap to 2`);
+    
+    // Reset and try with topicCap=2
+    topicCounts.clear();
+    selected.length = 0;
+    
+    for (const q of shuffled) {
+      const currentCount = topicCounts.get(q.effectiveTopic) || 0;
+      
+      if (currentCount < 2) {
+        selected.push(q);
+        topicCounts.set(q.effectiveTopic, currentCount + 1);
+        
+        if (selected.length === count) {
+          break;
+        }
+      }
+    }
+    
+    console.log(`[QuestionBank] After topicCap=2 fallback: ${selected.length} questions`);
+  }
+
+  // Step 5: Final check
+  if (selected.length < count) {
+    const availableCount = availableQuestions.length;
+    const uniqueTopics = new Set(questionsWithTopic.map(q => q.effectiveTopic)).size;
+    
+    throw new Error(
+      `Insufficient questions for matchmaking: need ${count}, found ${selected.length} after topicCap filter. ` +
+      `Available pool: ${availableCount} questions with ${uniqueTopics} unique topics. ` +
+      `Consider: 1) Adding more questions to database, 2) Reducing ROTATION_DAYS, 3) Relaxing topicCap further.`
+    );
+  }
+
+  // Step 6: Mark as served
+  const questionIds = selected.map(q => q.id);
+  await markQuestionsAsServed(questionIds);
+
+  // Step 7: Build final pack
+  const seed = crypto.randomBytes(32).toString('hex');
+  
+  // Final shuffle for extra randomness
+  const finalShuffled = shuffleArray(selected).slice(0, count);
+
+  const questions: QuestionWithAnswer[] = finalShuffled.map((q) => ({
+    id: `q-${crypto.randomUUID()}`,
+    text: q.questionText,
+    options: JSON.parse(q.options) as [string, string, string, string],
+    correctIndex: q.correctIndex as 0 | 1 | 2 | 3,
+    imageSearchQuery: null,
+    imageUrl: null,
+  }));
+
+  // Create commit hash for anti-cheat
+  const answersString = questions.map(q => q.correctIndex).join(',');
+  const commitHash = crypto
+    .createHash('sha256')
+    .update(seed + answersString)
+    .digest('hex');
+
+  // Step 8: Calculate statistics
+  const difficultyDistribution: Record<string, number> = {};
+  const topicDistribution: Record<string, number> = {};
+
+  for (const q of finalShuffled) {
+    difficultyDistribution[q.difficulty] = (difficultyDistribution[q.difficulty] || 0) + 1;
+    topicDistribution[q.effectiveTopic] = (topicDistribution[q.effectiveTopic] || 0) + 1;
+  }
+
+  // Log statistics
+  console.log(JSON.stringify({
+    event: 'matchmaking_questions_generated',
+    count: finalShuffled.length,
+    language,
+    difficultyDistribution,
+    topicDistribution,
+    uniqueTopics: Object.keys(topicDistribution).length,
+    timestamp: new Date().toISOString(),
+  }));
+
+  return {
+    questions,
+    seed,
+    commitHash,
+    stats: {
+      fromCache: finalShuffled.length,
+      newlyGenerated: 0,
+      difficultyDistribution,
+      topicDistribution,
+    },
   };
 }
 
