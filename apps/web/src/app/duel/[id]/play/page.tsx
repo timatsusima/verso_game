@@ -16,6 +16,7 @@ import { DuelToasts, useDuelToasts } from '@/components/game/duel-toasts';
 import { UrgencyHUD, UrgencyTimer } from '@/components/game/urgency-mode';
 import { DuelResultScreen, type DuelOutcome } from '@/components/game/duel-result-screen';
 import { DuelLoadingOverlay } from '@/components/game/duel-loading-overlay';
+import { H2HStatsDisplay } from '@/components/game/h2h-stats';
 import { cn } from '@/lib/utils';
 import type { PlayerAnswerInfo } from '@tg-duel/shared';
 
@@ -746,12 +747,19 @@ export default function PlayPage() {
 
   // Waiting for opponent / Ready to start
   if (status === 'waiting' || status === 'ready') {
+    const opponentId = opponent?.id || null;
+
     return (
-      <div className="flex-1 flex flex-col p-6">
-        <div className="text-center mb-8">
+      <div className="flex-1 flex flex-col p-6 space-y-4">
+        <div className="text-center">
           <div className="text-6xl mb-4">⚔️</div>
           <h1 className="text-2xl font-bold mb-2">{topic}</h1>
         </div>
+
+        {/* H2H Stats - show when opponent has joined */}
+        {opponentId && (
+          <H2HStatsDisplay opponentId={opponentId} />
+        )}
 
         <Card variant="bordered" className="flex-1 flex flex-col items-center justify-center">
           <ScoreDisplay
