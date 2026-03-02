@@ -509,6 +509,21 @@ export async function getMatchmakingQuestions(
 
   console.log(`[QuestionBank] Found ${availableQuestions.length} available questions (medium+hard)`);
 
+  // Fallback for fresh databases: if bank is empty, generate a pack directly
+  // This allows ranked matchmaking to work on a new installation without pre-seeding questionBank.
+  if (availableQuestions.length === 0) {
+    const fallbackTopic = language === 'ru' ? 'Общая эрудиция' : 'General Knowledge';
+    console.warn(
+      `[QuestionBank] No questions available in bank for matchmaking, falling back to direct generation via getOrGenerateQuestions for topic "${fallbackTopic}"`
+    );
+    return getOrGenerateQuestions(
+      fallbackTopic,
+      count,
+      language,
+      'medium'
+    );
+  }
+
   if (availableQuestions.length === 0) {
     throw new Error('No questions available for matchmaking (medium+hard)');
   }
